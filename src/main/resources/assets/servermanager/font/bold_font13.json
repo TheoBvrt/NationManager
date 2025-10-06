@@ -1,0 +1,10 @@
+{
+  "providers": [
+    {
+      "type": "ttf",
+      "file": "servermanager:inter.ttf",
+      "size": 13,
+      "oversample": 4.0
+    }
+  ]
+}

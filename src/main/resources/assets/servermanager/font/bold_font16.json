@@ -1,0 +1,10 @@
+{
+  "providers": [
+    {
+      "type": "ttf",
+      "file": "servermanager:opensans_bold.ttf",
+      "size": 16,
+      "oversample": 10
+    }
+  ]
+}
