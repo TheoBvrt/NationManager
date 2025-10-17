@@ -25,6 +25,7 @@ public class FactionManager {
     private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
     private static final Type LIST_TYPE = new TypeToken<List<FactionData>>(){}.getType();
     private static List<FactionData> cache = new ArrayList<>();
+    public static List<String[]> invitations = new ArrayList<>();
 
     public static List<FactionData> loadFactionData() {
         try (Reader reader = new FileReader(FILE_PATH)) {
@@ -62,6 +63,13 @@ public class FactionManager {
             e.printStackTrace();
         }
         cache = new ArrayList<>(factionDataList);
+    }
+
+    public static int getClaimPrice(String factionName) {
+        int nbClaim = FactionManager.getTotalChunks(factionName);
+        int targetPriceFor30 = ServerVariable.targetPriceFor30;
+        double pente = (double) (targetPriceFor30 - ServerVariable.claimBasePrice) / 30;
+        return (int) (ServerVariable.claimBasePrice + pente * nbClaim);
     }
 
     public static void createNewFaction(FactionData factionData) {
@@ -203,6 +211,20 @@ public class FactionManager {
                 return;
             }
         }
+    }
+
+    public static void invitePlayerToFaction(String playerUuid, String factionName) {
+        invitations.add(new String[] {factionName, playerUuid});
+    }
+
+    public static void deleteInvitation(String playerUuid, String factionName) {
+        invitations.removeIf(inv ->
+                inv[0].equals(factionName) && inv[1].equals(playerUuid)
+        );
+    }
+
+    public static boolean playerIsInvited(String playerUuid, String factionName) {
+        return invitations.stream().anyMatch(inv -> inv[0].equals(factionName) && inv[1].equals(playerUuid));
     }
 
     public static void removePlayer(String playerUuid, String factionName) {

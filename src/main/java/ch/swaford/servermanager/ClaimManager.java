@@ -138,6 +138,13 @@ public class ClaimManager {
         return false;
     }
 
+    public static boolean claimIsBorder(int x, int z, String factionName) {
+        return !ClaimManager.getClaimOwner(x - 1, z).equals(factionName)
+                || !ClaimManager.getClaimOwner(x, z - 1).equals(factionName)
+                || !ClaimManager.getClaimOwner(x, z + 1).equals(factionName)
+                || !ClaimManager.getClaimOwner(x + 1, z).equals(factionName);
+    }
+
     public static List<ClaimData> getClaimList() {
         return cache;
     }

@@ -6,11 +6,16 @@ import ch.swaford.servermanager.networktransfer.ServerShopItemData;
 import ch.swaford.servermanager.networktransfer.ServerShopPayload;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.common.NeoForgeConfig;
 import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -18,6 +23,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
+import java.util.logging.Level;
 
 public class ShopManager {
     private static final String FILE_PATH = "shop.json";
@@ -181,12 +187,17 @@ public class ShopManager {
         ShopData shopData = loadShop();
         List<ShopItemData> shopItemDataList = shopData.items;
 
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server == null) { return; }
+
+        int playerCount = server.getPlayerList().getPlayerCount();
+        System.out.println("playerCount: " + playerCount);
         for (ShopItemData shopItemData : shopItemDataList) {
             if (shopItemData.limited)
                 continue;
             boolean update = false;
             double rand = Math.random();
-            if (rand < (double) 21 /42) {
+            if (rand < (double) playerCount /42) {
                 shopItemData.totalBuy ++;
                 update = true;
             }
@@ -215,24 +226,31 @@ public class ShopManager {
 
         if (shopItemDataList.size() <= 4) {
             for (ShopItemData shopItemData : shopItemDataList) {
+                System.out.println(shopItemData.limited);
+                if (shopItemData.limited) {
+                    shopItemData.maxBuyValue = shopItemData.defaultBuyValue;}
                 shopItemData.enabled = true;
             }
-            return;
         }
-        while (set.size() < 4) {
-            set.add(rand.nextInt(max));
-        }
-        for (ShopItemData shopItemData : shopItemDataList) {
-            if (shopItemData.limited)
-                shopItemData.maxBuyValue = shopItemData.defaultBuyValue;
-            shopItemData.enabled = false;
-        }
+        else
+        {
+            while (set.size() < 4) {
+                set.add(rand.nextInt(max));
+            }
+            for (ShopItemData shopItemData : shopItemDataList) {
+                if (shopItemData.limited)
+                    shopItemData.maxBuyValue = shopItemData.defaultBuyValue;
+                shopItemData.enabled = false;
+            }
 
-        for (Integer integer : set) {
-            ShopItemData shopItemData = shopItemDataList.get(integer);
-            shopItemData.enabled = true;
+            for (Integer integer : set) {
+                ShopItemData shopItemData = shopItemDataList.get(integer);
+                shopItemData.enabled = true;
+            }
         }
         saveShopData(shopData);
+        ServerShopPayload payload = new ServerShopPayload(getServerShopItemData());
+        PacketDistributor.sendToAllPlayers(payload);
     }
 
     public static void updateShopItem() {
@@ -249,6 +267,9 @@ public class ShopManager {
 
             if (shopItemDataList.size() <= 4) {
                 for (ShopItemData shopItemData : shopItemDataList) {
+                    System.out.println("test");
+                    if (shopItemData.limited)
+                        shopItemData.maxBuyValue = shopItemData.defaultBuyValue;
                     shopItemData.enabled = true;
                 }
                 continue;

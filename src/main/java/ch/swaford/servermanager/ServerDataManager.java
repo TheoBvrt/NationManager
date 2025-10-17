@@ -107,10 +107,10 @@ public class ServerDataManager {
         for (String playerUuid : serverData.serverSessionData.playersList) {
             ServerPlayer serverPlayer = server.getPlayerList().getPlayer(UUID.fromString(playerUuid));
             if (serverPlayer != null) {
-                serverPlayer.sendSystemMessage(Component.literal("§lServeur : vous avez reçu votre salaire : §e" + (prime + ServerVariable.baseSalary) + "€ "));
+                serverPlayer.sendSystemMessage(Component.literal("§lServeur : vous avez reçu votre salaire : §e" + (/*prime +*/ ServerVariable.baseSalary) + "€ "));
             }
             serverData.serverEconomyData.currentBankBalance -= prime;
-            EconomyManager.addMoney(playerUuid, prime + ServerVariable.baseSalary);
+            EconomyManager.addMoney(playerUuid, /*prime +*/ ServerVariable.baseSalary);
         }
         saveServerData(serverData);
     }

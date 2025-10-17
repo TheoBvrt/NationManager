@@ -127,7 +127,7 @@ public class ClassementManager {
             for (ClassementData classementData : classementDataList) {
                 if (!classementData.classementName.equals("nation_puissance") && classementData.enable) {
                     for (NationScoreData nationScoreData : classementData.nationScoreDataList) {
-                        if (nationScoreData.nationName.equals(nationName)) {
+                        if (nationScoreData.nationName.equals(nationName) && nationScoreData.score > 0) {
                             int rank = nationScoreData.rank;
                             if (rank == 1)
                                 newPower += 100;

@@ -29,12 +29,12 @@ public class ClaimInteractionProtection {
         BlockState state = event.getLevel().getBlockState(pos);
         ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock());
         System.out.println(blockId);
-        if (blockId.getNamespace().equals("ballistix") && claimFaction.equals("server")) {
+        if (blockId.getNamespace().equals("ballistix") && claimFaction.equals("server") && !player.hasPermissions(2)) {
             event.setCanceled(true);
             player.sendSystemMessage(Component.literal("§cAccès refusé : cet équipement militaire ne se trouve pas sur votre territoire."));
         }
 
-        if (claimFaction.equals("server")) return;
+        //if (claimFaction.equals("server")) return;
 
         String playerFaction = PlayerDataBase.getPlayerFaction(player.getStringUUID());
         if (!claimFaction.equals(playerFaction) && !player.hasPermissions(2)) {
@@ -55,12 +55,12 @@ public class ClaimInteractionProtection {
 
         String claimFaction = ClaimManager.getClaimOwner(currentChunk.x, currentChunk.z);
         ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(event.getPlacedBlock().getBlock());
-        if (blockId.getNamespace().equals("ballistix") && claimFaction.equals("server")) {
+        if (blockId.getNamespace().equals("ballistix") && claimFaction.equals("server") && !player.hasPermissions(2)) {
             event.setCanceled(true);
             player.sendSystemMessage(Component.literal("§cVous ne pouvez pas déployer d’équipement militaire en dehors de votre territoire."));
         }
 
-        if (claimFaction.equals("server")) return;
+        //if (claimFaction.equals("server")) return;
 
         String playerFaction = PlayerDataBase.getPlayerFaction(player.getStringUUID());
         if (!claimFaction.equals(playerFaction) && !player.hasPermissions(2)) {
@@ -81,7 +81,7 @@ public class ClaimInteractionProtection {
         ChunkPos currentChunk = new ChunkPos(pos);
         String claimFaction = ClaimManager.getClaimOwner(currentChunk.x, currentChunk.z);
 
-        if (claimFaction.equals("server")) return;
+        //if (claimFaction.equals("server")) return;
 
         String playerFaction = PlayerDataBase.getPlayerFaction(player.getStringUUID());
         if (!claimFaction.equals(playerFaction) && !player.hasPermissions(2)) {
@@ -102,7 +102,7 @@ public class ClaimInteractionProtection {
 
         String claimFaction = ClaimManager.getClaimOwner(currentChunk.x, currentChunk.z);
 
-        if (claimFaction.equals("server")) return;
+        //if (claimFaction.equals("server")) return;
 
         String playerFaction = PlayerDataBase.getPlayerFaction(player.getStringUUID());
         if (!claimFaction.equals(playerFaction) && !player.hasPermissions(2)) {

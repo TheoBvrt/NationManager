@@ -16,7 +16,9 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.nbt.TagParser;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.ServerScoreboard;
@@ -39,6 +41,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
 import org.jetbrains.annotations.NotNull;
 
+import java.text.NumberFormat;
 import java.util.*;
 
 /*
@@ -93,7 +96,7 @@ public class FactionCommands {
 
         if (PlayerDataBase.playerHasFaction(target.getStringUUID())) {
             int balance = FactionManager.getBalance(target.getStringUUID());
-            int amount = (int)(balance * 0.05);
+            int amount = (int)(balance * 0.02);
             if (balance >= amount && balance > 0) {
                 FactionManager.subMoney(PlayerDataBase.getPlayerFaction(target.getStringUUID()), amount);
             }
@@ -107,7 +110,7 @@ public class FactionCommands {
         if (!(livingEntity instanceof Player target)) return;
         if (PlayerDataBase.playerHasFaction(target.getStringUUID())) {
             int balance = FactionManager.getBalance(target.getStringUUID());
-            int amount = (int)(balance * 0.05);
+            int amount = (int)(balance * 0.02);
             if (balance >= amount && balance > 0) {
                 FactionManager.subMoney(PlayerDataBase.getPlayerFaction(target.getStringUUID()), amount);
             }
@@ -201,12 +204,18 @@ public class FactionCommands {
         if (ClaimManager.checkIfChunkIsClaimed(currentChunk.x, currentChunk.z)) {
             String playerFactionName = PlayerDataBase.getPlayerFaction(player.getStringUUID());
             String chunkFactionName = ClaimManager.getClaimOwner(currentChunk.x, currentChunk.z);
-            int newClaimPrice = claimPrice * (FactionManager.getPower(playerFactionName) / FactionManager.getPower(chunkFactionName));
+            int powerFaction = FactionManager.getPower(playerFactionName);
+            int targetFactionPower = FactionManager.getPower(chunkFactionName);
+            int newClaimPrice = claimPrice * (FactionManager.getPower(playerFactionName) / targetFactionPower);
             if (playerFactionName.equals(chunkFactionName)) {
                 player.displayClientMessage(Component.literal("§e" + chunkFactionName), true);
             }
             else {
-                player.displayClientMessage(Component.literal("§e" + chunkFactionName +  " prix de surclaim : " + newClaimPrice + " euros"), true);
+                if (targetFactionPower > powerFaction) {
+                    player.displayClientMessage(Component.literal("§cClaim impossible"), true);
+                }
+                else
+                    player.displayClientMessage(Component.literal("§e" + chunkFactionName +  " prix de surclaim : " + NumberFormat.getInstance(Locale.FRENCH).format(newClaimPrice) + "€"), true);
             }
         } else {
             player.displayClientMessage(Component.literal("§flibre"), true);
@@ -228,6 +237,12 @@ public class FactionCommands {
                                 })
                         )
                 )
+                        .then(Commands.literal("test")
+                                .executes(ctx -> {
+                                    System.out.println(FactionManager.getClaimPrice("Suisse"));
+                                    return 1;
+                                })
+                        )
                 .then(Commands.literal("create")
                         .then(Commands.argument("name", StringArgumentType.string())
                                 .executes(ctx -> {
@@ -366,7 +381,7 @@ public class FactionCommands {
                                 })
                         )
                 )
-                .then(Commands.literal("addplayer")
+                .then(Commands.literal("invit")
                         .then(Commands.argument("player", EntityArgument.player())
                                 .executes(ctx -> {
                                     ServerPlayer sourcePlayer = ctx.getSource().getPlayerOrException();
@@ -379,10 +394,32 @@ public class FactionCommands {
                                         return 0;
                                     }
                                     if (PlayerDataBase.getPlayerFaction(targetPlayer.getStringUUID()).equals("server")) {
-                                        PlayerDataBase.setPlayerFaction(targetPlayer.getStringUUID(), currentPlayerFaction);
-                                        FactionManager.addPlayerToFaction(targetPlayer.getStringUUID(), currentPlayerFaction);
+//                                        PlayerDataBase.setPlayerFaction(targetPlayer.getStringUUID(), currentPlayerFaction);
+//                                        FactionManager.addPlayerToFaction(targetPlayer.getStringUUID(), currentPlayerFaction);
+                                        if (FactionManager.playerIsInvited(targetPlayer.getStringUUID(), currentPlayerFaction)) {
+                                            ctx.getSource().sendFailure(
+                                                    Component.literal("§cVous avez déjà invité ce joueur")
+                                            );
+                                            return 0;
+                                        }
+                                        FactionManager.invitePlayerToFaction(targetPlayer.getStringUUID(), currentPlayerFaction);
+                                        targetPlayer.sendSystemMessage(
+                                                Component.literal("&eVous avez été invité à rejoindre la nation " + currentPlayerFaction)
+                                        );
+
+                                        targetPlayer.sendSystemMessage(
+                                                Component.literal("§7Cliquez ici pour accepter : ")
+                                                        .append(
+                                                                Component.literal("§a[Rejoindre la nation]")
+                                                                        .withStyle(style -> style
+                                                                                .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/nation join " + currentPlayerFaction))
+                                                                                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+                                                                                        Component.literal("§7Exécuter /nation join " + currentPlayerFaction)))
+                                                                        )
+                                                        )
+                                        );
                                         ctx.getSource().sendSuccess(
-                                                () -> Component.literal("§eLe joueur " + targetPlayer.getName().getString() + " viens de rejoindre la nation"), true
+                                                () -> Component.literal("§eVous avez invité " + targetPlayer.getName().getString() + " à rejoindre votre nation"), true
                                         );
                                     } else {
                                         ctx.getSource().sendFailure(
@@ -394,6 +431,35 @@ public class FactionCommands {
                                 })
                         )
                 )
+                        .then(Commands.literal("join")
+                                .then(Commands.argument("nation", StringArgumentType.string())
+                                        .executes(ctx -> {
+                                            ServerPlayer sourcePlayer = ctx.getSource().getPlayerOrException();
+                                            String currentPlayerFaction = PlayerDataBase.getPlayerFaction(sourcePlayer.getStringUUID());
+                                            String targetFaction = StringArgumentType.getString(ctx, "nation");
+                                            if (!currentPlayerFaction.equals("server")) {
+                                                ctx.getSource().sendFailure(
+                                                        Component.literal("§cvous appartenez déjà à une nation")
+                                                );
+                                                return 0;
+                                            }
+                                            if (FactionManager.playerIsInvited(sourcePlayer.getStringUUID(), targetFaction)) {
+                                                FactionManager.deleteInvitation(sourcePlayer.getStringUUID(), targetFaction);
+                                                PlayerDataBase.setPlayerFaction(sourcePlayer.getStringUUID(), targetFaction);
+                                                FactionManager.addPlayerToFaction(sourcePlayer.getStringUUID(), targetFaction);
+                                                ctx.getSource().sendSuccess(
+                                                        () -> Component.literal("§eVous avez rejoint la nation " + targetFaction), true
+                                                );
+                                                return 1;
+                                            } else {
+                                                ctx.getSource().sendFailure(
+                                                        Component.literal("§cAucune invitation")
+                                                );
+                                                return 0;
+                                            }
+                                        })
+                                )
+                        )
                 .then(Commands.literal("removeplayer")
                         .then(Commands.argument("player", StringArgumentType.string())
                                 .executes(ctx -> {
@@ -618,42 +684,42 @@ public class FactionCommands {
                                 })
                         )
                 )
-                .then(Commands.literal("withdraw")
-                        .then(Commands.argument("amount", IntegerArgumentType.integer(1))
-                                .executes(ctx -> {
-                                    ServerPlayer sourcePlayer = ctx.getSource().getPlayerOrException();
-                                    int amount = IntegerArgumentType.getInteger(ctx, "amount");
-                                    String currentPlayerFaction = PlayerDataBase.getPlayerFaction(sourcePlayer.getStringUUID());
-                                    if (!PlayerDataBase.playerHasFaction(sourcePlayer.getStringUUID())) {
-                                        ctx.getSource().sendFailure(
-                                                Component.literal(Message.ERROR_PLAYER_DONT_HAVE_FACTION)
-                                        );
-                                        return 0;
-                                    }
-                                    if (FactionManager.playerIsOwner(sourcePlayer.getStringUUID(), currentPlayerFaction) ||
-                                            FactionManager.playerIsOfficer(sourcePlayer.getStringUUID(), currentPlayerFaction)) {
-                                        if (FactionManager.getBalance(currentPlayerFaction) >= amount) {
-                                            EconomyManager.addMoney(sourcePlayer.getStringUUID(), amount);
-                                            FactionManager.subMoney(currentPlayerFaction, amount);
-                                            ctx.getSource().sendSuccess(
-                                                    () -> Component.literal("§eVous venez de retirer " + amount + " euros sur le compte de votre nation"), true
-                                            );
-                                            return 1;
-                                        } else {
-                                            ctx.getSource().sendFailure(
-                                                    Component.literal("§cVotre nation n’a pas suffisamment d’argent")
-                                            );
-                                            return 0;
-                                        }
-                                    } else {
-                                        ctx.getSource().sendFailure(
-                                                Component.literal("§cVous ne pouvez pas retirer d’argent du compte bancaire de votre nation")
-                                        );
-                                        return 0;
-                                    }
-                                })
-                        )
-                )
+//                .then(Commands.literal("withdraw")
+//                        .then(Commands.argument("amount", IntegerArgumentType.integer(1))
+//                                .executes(ctx -> {
+//                                    ServerPlayer sourcePlayer = ctx.getSource().getPlayerOrException();
+//                                    int amount = IntegerArgumentType.getInteger(ctx, "amount");
+//                                    String currentPlayerFaction = PlayerDataBase.getPlayerFaction(sourcePlayer.getStringUUID());
+//                                    if (!PlayerDataBase.playerHasFaction(sourcePlayer.getStringUUID())) {
+//                                        ctx.getSource().sendFailure(
+//                                                Component.literal(Message.ERROR_PLAYER_DONT_HAVE_FACTION)
+//                                        );
+//                                        return 0;
+//                                    }
+//                                    if (FactionManager.playerIsOwner(sourcePlayer.getStringUUID(), currentPlayerFaction) ||
+//                                            FactionManager.playerIsOfficer(sourcePlayer.getStringUUID(), currentPlayerFaction)) {
+//                                        if (FactionManager.getBalance(currentPlayerFaction) >= amount) {
+//                                            EconomyManager.addMoney(sourcePlayer.getStringUUID(), amount);
+//                                            FactionManager.subMoney(currentPlayerFaction, amount);
+//                                            ctx.getSource().sendSuccess(
+//                                                    () -> Component.literal("§eVous venez de retirer " + amount + " euros sur le compte de votre nation"), true
+//                                            );
+//                                            return 1;
+//                                        } else {
+//                                            ctx.getSource().sendFailure(
+//                                                    Component.literal("§cVotre nation n’a pas suffisamment d’argent")
+//                                            );
+//                                            return 0;
+//                                        }
+//                                    } else {
+//                                        ctx.getSource().sendFailure(
+//                                                Component.literal("§cVous ne pouvez pas retirer d’argent du compte bancaire de votre nation")
+//                                        );
+//                                        return 0;
+//                                    }
+//                                })
+//                        )
+//                )
                 .then(Commands.literal("balance")
                         .executes(ctx -> {
                             ServerPlayer sourcePlayer = ctx.getSource().getPlayerOrException();
@@ -722,6 +788,7 @@ public class FactionCommands {
                                 if (FactionManager.playerIsOwner(sourcePlayer.getStringUUID(), currentPlayerFaction) ||
                                         FactionManager.playerIsOfficer(sourcePlayer.getStringUUID(), currentPlayerFaction)) {
                                     int factionBalance = FactionManager.getBalance(currentPlayerFaction);
+                                    int factionClaimPrice = FactionManager.getClaimPrice(currentPlayerFaction);
                                     if (!ClaimManager.checkIfChunkIsClaimed(chunkX, chunkZ)) {
                                         if (FactionManager.getTotalChunks(currentPlayerFaction) > 0 && !ClaimManager.claimHaveNeighbors(chunkX, chunkZ, currentPlayerFaction)) {
                                             ctx.getSource().sendFailure(
@@ -729,15 +796,15 @@ public class FactionCommands {
                                             );
                                             return 0;
                                         }
-                                        if (factionBalance >= claimPrice) {
+                                        if (factionBalance >= factionClaimPrice) {
                                             //Claim
-                                            FactionManager.subMoney(currentPlayerFaction, claimPrice);
-                                            ServerDataManager.addBankBalance(claimPrice);
+                                            FactionManager.subMoney(currentPlayerFaction, factionClaimPrice);
+                                            ServerDataManager.addBankBalance(factionClaimPrice);
                                             ClaimData newClaimData = new ClaimData(currentPlayerFaction, chunkX, chunkZ, FactionManager.getFactionColor(currentPlayerFaction));
                                             ClaimManager.createClaim(newClaimData);
                                             FactionManager.incrementTotalChunk(currentPlayerFaction);
                                             ctx.getSource().sendSuccess(
-                                                    () -> Component.literal("§eVous venez de réclamer le territoire pour " + claimPrice + " euros"), true
+                                                    () -> Component.literal("§eVous venez de réclamer le territoire pour " + factionClaimPrice + " euros"), true
                                             );
                                             return 1;
                                         } else {
@@ -751,9 +818,9 @@ public class FactionCommands {
                                             String defensingFactionName = ClaimManager.getClaimOwner(chunkX, chunkZ);
                                             int attackingFaction = FactionManager.getPower(currentPlayerFaction);
                                             int defensingFaction = FactionManager.getPower(defensingFactionName);
-                                            if (FactionManager.getTotalChunks(currentPlayerFaction) > 0 && !ClaimManager.claimHaveNeighbors(chunkX, chunkZ, currentPlayerFaction)) {
+                                            if (!ClaimManager.claimIsBorder(chunkX, chunkZ, defensingFactionName)) {
                                                 ctx.getSource().sendFailure(
-                                                        Component.literal("§cVous ne pouvez pas réclamer un terrain non limitrophe")
+                                                        Component.literal("§cAction refusée : ce chunk n’est pas en bordure du territoire ennemi.")
                                                 );
                                                 return 0;
                                             }
