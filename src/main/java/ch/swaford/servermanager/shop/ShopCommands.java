@@ -121,62 +121,88 @@ public class ShopCommands {
                 )
                 .then(Commands.literal("sell")
                         .then(Commands.argument("item", StringArgumentType.string())
-                                .executes(ctx -> {
-                                    ServerPlayer player = ctx.getSource().getPlayerOrException();
-                                    String itemName =  StringArgumentType.getString(ctx, "item");
-                                    ResourceLocation id = ResourceLocation.tryParse(itemName);
-                                    Item item = BuiltInRegistries.ITEM.get(id);
-                                    if (item == Items.AIR) {
-                                        ctx.getSource().sendFailure(
-                                                Component.literal("§eErreur")
-                                        );
-                                        return 0;
-                                    }
-                                    if (!ShopManager.isItemAvailableForSell(item)) {
-                                        ctx.getSource().sendFailure(
-                                                Component.literal("§eCette item n'est actuellement pas vendable")
-                                        );
-                                        return 0;
-                                    }
-                                    if (ShopManager.getCountOfItem(player, item) < ShopManager.getQuantity(item)) {
-                                        ctx.getSource().sendFailure(
-                                                Component.literal("§eVous ne posséder pas assez d'item à vendre")
-                                        );
-                                        return 0;
-                                    }
-                                    ShopManager.sellItem(player, item);
-                                    return 1;
-                                })
+                                .then(Commands.argument("quantity", IntegerArgumentType.integer(0))
+                                        .executes(ctx -> {
+                                            ServerPlayer player = ctx.getSource().getPlayerOrException();
+                                            int quantity = IntegerArgumentType.getInteger(ctx, "quantity");
+                                            String itemName =  StringArgumentType.getString(ctx, "item");
+                                            ResourceLocation id = ResourceLocation.tryParse(itemName);
+                                            Item item = BuiltInRegistries.ITEM.get(id);
+                                            if (item == Items.AIR) {
+                                                ctx.getSource().sendFailure(
+                                                        Component.literal("§eErreur")
+                                                );
+                                                return 0;
+                                            }
+                                            if (!ShopManager.isItemAvailableForSell(item)) {
+                                                ctx.getSource().sendFailure(
+                                                        Component.literal("§eCette item n'est actuellement pas vendable")
+                                                );
+                                                return 0;
+                                            }
+                                            int maxQuantity = ShopManager.getQuantity(item);
+                                            if (quantity > maxQuantity || (quantity != 10 && quantity != maxQuantity)) {
+                                                ctx.getSource().sendFailure(
+                                                        Component.literal("§cQuantité invalide")
+                                                );
+                                                return 0;
+                                            }
+                                            if (ShopManager.getCountOfItem(player, item) < quantity) {
+                                                ctx.getSource().sendFailure(
+                                                        Component.literal("§eVous ne posséder pas assez d'item à vendre")
+                                                );
+                                                return 0;
+                                            }
+                                            if (ShopManager.getSellPrice(item, quantity) <= 0) {
+                                                ctx.getSource().sendFailure(
+                                                        Component.literal("§cQuantité invalide")
+                                                );
+                                                return 0;
+                                            }
+                                            ShopManager.sellItem(player, item, quantity);
+                                            return 1;
+                                        })
+                                )
                         )
                 )
                 .then(Commands.literal("buy")
                         .then(Commands.argument("item", StringArgumentType.string())
-                                .executes(ctx -> {
-                                    ServerPlayer player = ctx.getSource().getPlayerOrException();
-                                    String itemName =  StringArgumentType.getString(ctx, "item");
-                                    ResourceLocation id = ResourceLocation.tryParse(itemName);
-                                    Item item = BuiltInRegistries.ITEM.get(id);
-                                    if (item == Items.AIR) {
-                                        ctx.getSource().sendFailure(
-                                                Component.literal("§eErreur")
-                                        );
-                                        return 0;
-                                    }
-                                    if (!ShopManager.isItemAvailableForBuy(item)) {
-                                        ctx.getSource().sendFailure(
-                                                Component.literal("§eCette item n'est actuellement pas achetable")
-                                        );
-                                        return 0;
-                                    }
-                                    if (EconomyManager.getPlayerBalance(player.getStringUUID()) < ShopManager.getBuyPrice(item)) {
-                                        ctx.getSource().sendFailure(
-                                                Component.literal("§eVous n'avez pas assez d'argent pour acheter'")
-                                        );
-                                        return 0;
-                                    }
-                                    ShopManager.buyItem(player, item);
-                                    return 1;
-                                })
+                                .then(Commands.argument("quantity", IntegerArgumentType.integer())
+                                        .executes(ctx -> {
+                                            ServerPlayer player = ctx.getSource().getPlayerOrException();
+                                            String itemName =  StringArgumentType.getString(ctx, "item");
+                                            int  quantity = IntegerArgumentType.getInteger(ctx, "quantity");
+                                            ResourceLocation id = ResourceLocation.tryParse(itemName);
+                                            Item item = BuiltInRegistries.ITEM.get(id);
+                                            if (item == Items.AIR) {
+                                                ctx.getSource().sendFailure(
+                                                        Component.literal("§eErreur")
+                                                );
+                                                return 0;
+                                            }
+                                            if (!ShopManager.isItemAvailableForBuy(item)) {
+                                                ctx.getSource().sendFailure(
+                                                        Component.literal("§eCette item n'est actuellement pas achetable")
+                                                );
+                                                return 0;
+                                            }
+                                            int maxQuantity = ShopManager.getQuantity(item);
+                                            if (quantity > maxQuantity || (quantity != 1 && quantity != 10 && quantity != maxQuantity)) {
+                                                ctx.getSource().sendFailure(
+                                                        Component.literal("§cQuantité invalide")
+                                                );
+                                                return 0;
+                                            }
+                                            if (EconomyManager.getPlayerBalance(player.getStringUUID()) < ShopManager.getBuyPrice(item, quantity)) {
+                                                ctx.getSource().sendFailure(
+                                                        Component.literal("§eVous n'avez pas assez d'argent pour acheter'")
+                                                );
+                                                return 0;
+                                            }
+                                            ShopManager.buyItem(player, item, quantity);
+                                            return 1;
+                                        })
+                                )
                         )
                 )
                 .then(Commands.literal("resetprice")

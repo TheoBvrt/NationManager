@@ -23,6 +23,7 @@ public record ServerShopPayload(List<ServerShopItemData> serverShopItemData) imp
                             buf.writeInt(item.sellPrice());
                             buf.writeInt(item.buyPrice());
                             buf.writeInt(item.quantity());
+                            buf.writeBoolean(item.limited());
                         }
                     },
                     // decode
@@ -35,7 +36,8 @@ public record ServerShopPayload(List<ServerShopItemData> serverShopItemData) imp
                             int sellPrice = buf.readInt();
                             int buyPrice = buf.readInt();
                             int quantity = buf.readInt();
-                            serverShopItemDataList.add(new ServerShopItemData(itemId, itemCategory, sellPrice, buyPrice, quantity));
+                            boolean limited = buf.readBoolean();
+                            serverShopItemDataList.add(new ServerShopItemData(itemId, itemCategory, sellPrice, buyPrice, quantity, limited));
                         }
                         return new ServerShopPayload(serverShopItemDataList);
                     }

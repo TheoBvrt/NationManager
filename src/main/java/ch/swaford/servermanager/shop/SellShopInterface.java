@@ -39,16 +39,16 @@ public class SellShopInterface extends BaseOwoScreen<FlowLayout> {
     }
 
     public void updatePrice() {
-        List<ServerShopItemData> serverShopItemDataList = ClientCache.getServerShopItemDataList();
-
-        for (ServerShopItemData serverShopItemData : serverShopItemDataList) {
-            FlowLayout container = shop.childById(FlowLayout.class, serverShopItemData.itemId());
-            if (container != null) {
-                ScaledTextComponent scaledTextComponent = container.childById(ScaledTextComponent.class, "sellPrice");
-                if (scaledTextComponent != null) {
-                    scaledTextComponent.setText(UITools.formatPrice(serverShopItemData.sellPrice()));
-                }
-            }
-        }
+//        List<ServerShopItemData> serverShopItemDataList = ClientCache.getServerShopItemDataList();
+//
+//        for (ServerShopItemData serverShopItemData : serverShopItemDataList) {
+//            FlowLayout container = shop.childById(FlowLayout.class, serverShopItemData.itemId());
+//            if (container != null) {
+//                ScaledTextComponent scaledTextComponent = container.childById(ScaledTextComponent.class, "sellPrice");
+//                if (scaledTextComponent != null) {
+//                    scaledTextComponent.setText(UITools.formatPrice(serverShopItemData.sellPrice()));
+//                }
+//            }
+//        }
     }
 }

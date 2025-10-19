@@ -5,5 +5,6 @@ public record ServerShopItemData (
     String itemCategory,
     int sellPrice,
     int buyPrice,
-    int quantity
+    int quantity,
+    boolean limited
 ) {}

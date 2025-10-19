@@ -6,10 +6,7 @@ import ch.swaford.servermanager.clientinterface.ClientKeyManager;
 import ch.swaford.servermanager.clientinterface.ClientSetup;
 import ch.swaford.servermanager.clientinterface.JourneyMapPlugin;
 import ch.swaford.servermanager.networktransfer.*;
-import ch.swaford.servermanager.shop.BuyShopInterface;
-import ch.swaford.servermanager.shop.SellShopInterface;
-import ch.swaford.servermanager.shop.ShopCommands;
-import ch.swaford.servermanager.shop.ShopManager;
+import ch.swaford.servermanager.shop.*;
 import journeymap.api.v2.client.display.PolygonOverlay;
 import journeymap.api.v2.client.model.MapPolygon;
 import journeymap.api.v2.client.model.ShapeProperties;
@@ -228,6 +225,9 @@ public class ServerManager {
                         }
                         if (Minecraft.getInstance().screen instanceof SellShopInterface sellShopInterface) {
                             sellShopInterface.updatePrice();
+                        }
+                        if (Minecraft.getInstance().screen instanceof QuantityInterface quantityInterface) {
+                            quantityInterface.updatePrice();
                         }
                     });
                 }

@@ -79,7 +79,8 @@ public class ShopTemplate {
                         serverShopItemData.itemId(),
                         UITools.stackFromString(serverShopItemData.itemId()),
                         price,
-                        serverShopItemData.quantity()
+                        serverShopItemData.quantity(),
+                        serverShopItemData.limited()
                 ));
             } else {
                 rightContent.child(ItemContainer.createItemContainer(
@@ -89,7 +90,8 @@ public class ShopTemplate {
                         serverShopItemData.itemId(),
                         UITools.stackFromString(serverShopItemData.itemId()),
                         price,
-                        serverShopItemData.quantity()
+                        serverShopItemData.quantity(),
+                        serverShopItemData.limited()
                 ));
             }
             i ++;

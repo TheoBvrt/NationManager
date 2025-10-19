@@ -1,8 +1,10 @@
 package ch.swaford.servermanager.shop;
 
+import ch.swaford.servermanager.clientinterface.ConfirmationPopup;
 import ch.swaford.servermanager.clientinterface.ScaledTextComponent;
 import ch.swaford.servermanager.clientinterface.UITools;
 import ch.swaford.servermanager.networktransfer.RequestPlayerData;
+import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.Components;
 import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.container.Containers;
@@ -16,6 +18,7 @@ import io.wispforest.owo.ui.core.VerticalAlignment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ServerboundChatCommandPacket;
 import net.minecraft.resources.ResourceLocation;
@@ -28,9 +31,10 @@ import net.minecraft.world.item.Items;
 
 import java.awt.*;
 import java.util.Objects;
+import java.util.concurrent.Flow;
 
 public class ItemContainer {
-    public static FlowLayout createItemContainer(int targetH, int targetW, Boolean sellMod, String itemId, ItemStack stack, int defaultPrice, int quantity) {
+    public static FlowLayout createItemContainer(int targetH, int targetW, Boolean sellMod, String itemId, ItemStack stack, int defaultPrice, int quantity, boolean limited) {
         FlowLayout container = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.fill(29))
                 .surface(Surface.flat(0xFF252A40));
 
@@ -80,15 +84,26 @@ public class ItemContainer {
         priceContainer.child(new ScaledTextComponent(quantity + "x", 0xFFFFFFFF, 1, true).margins(Insets.left(2)));
 
         button.mouseDown().subscribe((mx, my, btn) -> {
-            var minecraftInstance = Minecraft.getInstance();
+            Minecraft minecraftInstance = Minecraft.getInstance();
             String command = sellMod ? "shop sell " : "shop buy ";
-            minecraftInstance.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0f));
-            assert minecraftInstance.player != null;
-            minecraftInstance.player.connection.send(new ServerboundChatCommandPacket(command + "\"" + itemId + "\""));
-            if (sellMod)
-                Objects.requireNonNull(minecraftInstance.getConnection()).send(new RequestPlayerData(4));
-            else
-                Objects.requireNonNull(minecraftInstance.getConnection()).send(new RequestPlayerData(3));
+            ResourceLocation id = ResourceLocation.tryParse(itemId);
+            Item item = BuiltInRegistries.ITEM.get(id);
+            if ( limited || quantity == 1 || (sellMod && ShopManager.floorDivPos(10L * defaultPrice, quantity) <= 0)) {
+                int newQuantity = limited ? 1 : quantity;
+                minecraftInstance.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0f));
+                assert minecraftInstance.player != null;
+                minecraftInstance.player.connection.send(new ServerboundChatCommandPacket(command + "\"" + itemId + "\" " + newQuantity));
+                if (sellMod)
+                    Objects.requireNonNull(minecraftInstance.getConnection()).send(new RequestPlayerData(4));
+                else
+                    Objects.requireNonNull(minecraftInstance.getConnection()).send(new RequestPlayerData(3));
+            } else
+            {
+                if (sellMod)
+                    minecraftInstance.setScreen(new QuantityInterface(stack, true, quantity, itemId, defaultPrice));
+                else
+                    minecraftInstance.setScreen(new QuantityInterface(stack, false, quantity, itemId, defaultPrice));
+            }
             return true;
         });
 

@@ -218,7 +218,11 @@ public class FactionCommands {
                     player.displayClientMessage(Component.literal("§e" + chunkFactionName +  " prix de surclaim : " + NumberFormat.getInstance(Locale.FRENCH).format(newClaimPrice) + "€"), true);
             }
         } else {
-            player.displayClientMessage(Component.literal("§flibre"), true);
+            String playerFactionName = PlayerDataBase.getPlayerFaction(player.getStringUUID());
+            if (playerFactionName.equals("server"))
+                player.displayClientMessage(Component.literal("§flibre"), true);
+            else
+                player.displayClientMessage(Component.literal("§flibre : " + NumberFormat.getInstance(Locale.FRENCH).format(FactionManager.getClaimPrice(playerFactionName)) + "€"), true);
         }
     }
 
@@ -237,12 +241,6 @@ public class FactionCommands {
                                 })
                         )
                 )
-                        .then(Commands.literal("test")
-                                .executes(ctx -> {
-                                    System.out.println(FactionManager.getClaimPrice("Suisse"));
-                                    return 1;
-                                })
-                        )
                 .then(Commands.literal("create")
                         .then(Commands.argument("name", StringArgumentType.string())
                                 .executes(ctx -> {
@@ -381,7 +379,7 @@ public class FactionCommands {
                                 })
                         )
                 )
-                .then(Commands.literal("invit")
+                .then(Commands.literal("invite")
                         .then(Commands.argument("player", EntityArgument.player())
                                 .executes(ctx -> {
                                     ServerPlayer sourcePlayer = ctx.getSource().getPlayerOrException();

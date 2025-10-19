@@ -120,8 +120,9 @@ public class ShopManager {
         return false;
     }
 
-    public static void sellItem(ServerPlayer player, Item itemToSell) {
-        int itemCount = getQuantity(itemToSell);
+    public static void sellItem(ServerPlayer player, Item itemToSell, int quantity) {
+//        int itemCount = getQuantity(itemToSell);
+        int itemCount = quantity;
         player.getInventory().clearOrCountMatchingItems(
                 item -> item.is(itemToSell),
                 itemCount,
@@ -131,15 +132,16 @@ public class ShopManager {
         List<ShopItemData> shopItemDataList = shopData.items;
 
         String displayName = new ItemStack(itemToSell).getHoverName().getString();
+        int price = getSellPrice(itemToSell, quantity);
         for (ShopItemData shopItemData : shopItemDataList) {
             if (shopItemData.itemId.equals(itemToSell.toString())) {
                 if (!shopItemData.limited)
-                    shopItemData.totalSell += shopItemData.quantity;
-                EconomyManager.addMoney(player.getStringUUID(), shopItemData.sellPrice);
-                player.sendSystemMessage(Component.literal("§lShop : vous avez vendu §e§lx" + itemCount + " §e§l" + displayName + "§f§l pour §e§l" + shopItemData.sellPrice + "€"));
-                ClassementEvent.onSell(player, shopItemData.quantity);
+                    shopItemData.totalSell += itemCount;
+                EconomyManager.addMoney(player.getStringUUID(), price);
+                player.sendSystemMessage(Component.literal("§lShop : vous avez vendu §e§lx" + itemCount + " §e§l" + displayName + "§f§l pour §e§l" +price + "€"));
+                ClassementEvent.onSell(player, itemCount);
                 if (shopItemData.limited)
-                    shopItemData.maxBuyValue += shopItemData.quantity;
+                    shopItemData.maxBuyValue += itemCount;
                 else {
                     shopItemData.sellPrice = (int) (shopItemData.basePrice * ((double)shopItemData.totalBuy / shopItemData.totalSell));
                     shopItemData.buyPrice = (int) (shopItemData.sellPrice * 1.1f);
@@ -151,8 +153,8 @@ public class ShopManager {
         PacketDistributor.sendToPlayer(player, payload);
     }
 
-    public static void buyItem(ServerPlayer player, Item itemToBuy) {
-        int quantity = getQuantity(itemToBuy);
+    public static void buyItem(ServerPlayer player, Item itemToBuy, int quantity) {
+//        int quantity = getQuantity(itemToBuy);
         ItemStack itemStack = new ItemStack(itemToBuy, quantity);
 
         player.getInventory().add(itemStack);
@@ -164,12 +166,13 @@ public class ShopManager {
         List<ShopItemData> shopItemDataList = shopData.items;
 
         String displayName = new ItemStack(itemToBuy).getHoverName().getString();
+        int price = getBuyPrice(itemToBuy,  quantity);
         for (ShopItemData shopItemData : shopItemDataList) {
             if (shopItemData.itemId.equals(itemToBuy.toString())) {
                 if (!shopItemData.limited)
                     shopItemData.totalBuy += quantity;
-                EconomyManager.subMoney(player.getStringUUID(), shopItemData.buyPrice);
-                player.sendSystemMessage(Component.literal("§lShop : vous avez acheté §e§lx" + quantity + " §e§l" + displayName + "§f§l pour §e§l" + shopItemData.buyPrice + "€"));
+                EconomyManager.subMoney(player.getStringUUID(), price);
+                player.sendSystemMessage(Component.literal("§lShop : vous avez acheté §e§lx" + quantity + " §e§l" + displayName + "§f§l pour §e§l" + price + "€"));
                 if (shopItemData.limited)
                     shopItemData.maxBuyValue -= quantity;
                 else {
@@ -191,7 +194,6 @@ public class ShopManager {
         if (server == null) { return; }
 
         int playerCount = server.getPlayerList().getPlayerCount();
-        System.out.println("playerCount: " + playerCount);
         for (ShopItemData shopItemData : shopItemDataList) {
             if (shopItemData.limited)
                 continue;
@@ -253,6 +255,14 @@ public class ShopManager {
         PacketDistributor.sendToAllPlayers(payload);
     }
 
+    static int ceilDivPos(long a, long b) {           // ceil(a / b)
+        return (int) ((a + b - 1) / b);
+    }
+
+    static int floorDivPos(long a, long b) {          // floor(a / b)
+        return (int) (a / b);
+    }
+
     public static void updateShopItem() {
         ShopData shopData = loadShop();
         List<List<ShopItemData>> listOfItemByCategory = new ArrayList<>();
@@ -288,7 +298,9 @@ public class ShopManager {
                 shopItemData.enabled = true;
             }
         }
-        
+
+
+
 //        List<ShopItemData> shopItemDataList = shopData.items;
 //        Random rand = new Random();
 //        Set<Integer> set = new HashSet<>();
@@ -321,7 +333,8 @@ public class ShopManager {
                         shopItemData.itemCategory,
                         shopItemData.sellPrice,
                         shopItemData.buyPrice,
-                        quantity
+                        quantity,
+                        shopItemData.limited
                 ));
             }
         }
@@ -351,15 +364,45 @@ public class ShopManager {
         return 0;
     }
 
-    public static int getBuyPrice(Item item) {
+    public static int  getSellPrice(Item item, int quantity) {
         ShopData shopData = cache;
         List<ShopItemData> shopItemDataList = shopData.items;
 
+        int price = -1;
         for (ShopItemData shopItemData : shopItemDataList) {
             if (shopItemData.itemId.equals(item.toString())) {
-                return shopItemData.buyPrice;
+                if (quantity == 10)
+                    price = floorDivPos(10L * shopItemData.sellPrice, shopItemData.quantity);
+                else if (quantity == shopItemData.quantity)
+                    price = shopItemData.sellPrice;
+                if (price == 0)
+                    return -1;
+                return (price);
             }
         }
+
+        return 0;
+    }
+
+    public static int getBuyPrice(Item item, int quantity) {
+        ShopData shopData = cache;
+        List<ShopItemData> shopItemDataList = shopData.items;
+
+        int price = -1;
+        for (ShopItemData shopItemData : shopItemDataList) {
+            if (shopItemData.itemId.equals(item.toString())) {
+                if (quantity == 1)
+                    price = ceilDivPos(shopItemData.buyPrice, shopItemData.quantity);
+                else if (quantity == 10)
+                    price = ceilDivPos(10L * shopItemData.buyPrice, shopItemData.quantity);
+                else if (quantity == shopItemData.quantity)
+                    price = shopItemData.buyPrice;
+                else
+                    price = shopItemData.buyPrice;
+                return (price);
+            }
+        }
+
         return 0;
     }
 
