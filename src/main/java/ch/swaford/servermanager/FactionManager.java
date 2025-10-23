@@ -80,37 +80,6 @@ public class FactionManager {
         ClassementManager.updateNationList();
     }
 
-    public static void setVoteStatus(boolean value, String factionName) {
-        List<FactionData> factionDataList = loadFactionData();
-
-        for (FactionData factionData : factionDataList) {
-            if (factionData.name.equals(factionName)) {
-                factionData.voted = value;
-                saveFactionData(factionDataList);
-                return;
-            }
-        }
-    }
-
-    public static void resetVoteStatus() {
-        List<FactionData> factionDataList = loadFactionData();
-
-        for (FactionData factionData : factionDataList) {
-            factionData.voted = false;
-        }
-        saveFactionData(factionDataList);
-    }
-
-    public static boolean getVote(String factionName) {
-        List<FactionData> factionDataList = cache;
-        for (FactionData factionData : factionDataList) {
-            if (factionData.name.equals(factionName)) {
-                return factionData.voted;
-            }
-        }
-        return true;
-    }
-
     public static void deleteFaction(String factionName) {
         List<FactionData> factionDataList = loadFactionData();
 
@@ -357,7 +326,9 @@ public class FactionManager {
         for (FactionData factionData : factionDataList) {
             if (factionData.name.equals(factionName)) {
                 String ownerName = PlayerDataBase.getPlayerNameByUuid(factionData.ownerUuid);
-                playerList.put(factionData.ownerUuid, ownerName);
+                if (ownerName != null) {
+                    playerList.put(factionData.ownerUuid, ownerName);
+                }
                 for (String officer : factionData.officers) {
                     String name = PlayerDataBase.getPlayerNameByUuid(officer);
                     if (name != null) {

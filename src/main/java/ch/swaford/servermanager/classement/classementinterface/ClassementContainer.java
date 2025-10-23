@@ -2,9 +2,13 @@ package ch.swaford.servermanager.classement.classementinterface;
 
 import ch.swaford.servermanager.clientinterface.ScaledTextComponent;
 import ch.swaford.servermanager.clientinterface.UITools;
+import ch.swaford.servermanager.networktransfer.RequestFactionData;
 import io.wispforest.owo.ui.container.Containers;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.core.*;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.sounds.SoundEvents;
 import org.jline.utils.Colors;
 
 import java.text.NumberFormat;
@@ -27,6 +31,15 @@ public class ClassementContainer {
 
         FlowLayout container = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.fixed(UITools.logicalH(0.16)))
                 .surface(Surface.flat(backgroundColor));
+
+        container.mouseDown().subscribe((mx, my, btn) -> {
+            Minecraft mc = Minecraft.getInstance();
+            mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0f));
+            if (mc.player != null && mc.getConnection() != null) {
+                mc.getConnection().send(new RequestFactionData(factionName, 0));
+            }
+            return true;
+        });
 
         FlowLayout rankContainer = (FlowLayout) Containers.verticalFlow(Sizing.fill(20), Sizing.fill(100))
                 .verticalAlignment(VerticalAlignment.CENTER)

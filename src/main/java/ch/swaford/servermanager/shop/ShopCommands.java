@@ -112,12 +112,26 @@ public class ShopCommands {
                             return 1;
                         })
                 )
-                .then(Commands.literal("reloadmili")
+                .then(Commands.literal("restock")
                         .requires(source -> source.hasPermission(2))
-                        .executes(ctx -> {
-                            ShopManager.reloadShopItemCategory("militaire");
-                            return 1;
-                        })
+                        .then(Commands.argument("itemId", StringArgumentType.string())
+                                .executes(ctx -> {
+                                    String itemId = StringArgumentType.getString(ctx, "itemId");
+                                    if (ShopManager.restockItem(itemId))
+                                    {
+                                        ctx.getSource().sendSuccess(
+                                                () -> Component.literal("§eReload"),
+                                                false
+                                        );
+                                    } else {
+                                        ctx.getSource().sendFailure(
+                                                Component.literal("§eErreur")
+                                        );
+                                        return 0;
+                                    }
+                                    return 1;
+                                })
+                        )
                 )
                 .then(Commands.literal("sell")
                         .then(Commands.argument("item", StringArgumentType.string())

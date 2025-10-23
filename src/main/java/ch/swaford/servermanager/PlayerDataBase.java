@@ -103,6 +103,37 @@ public class PlayerDataBase {
         return false;
     }
 
+    public static boolean getVote(String playerUuid) {
+        List<PlayerData> playerDataList = cache;
+        for (PlayerData playerData : playerDataList) {
+            if (playerData.uuid.equals(playerUuid)) {
+                return playerData.voteStatus;
+            }
+        }
+        return true;
+    }
+
+    public static void setVoteStatus(boolean value, String playerUuid) {
+        List<PlayerData> playerDataList = cache;
+
+        for (PlayerData playerData : playerDataList) {
+            if (playerData.uuid.equals(playerUuid)) {
+                playerData.voteStatus = value;
+                savePlayers(playerDataList);
+                return;
+            }
+        }
+    }
+
+    public static void resetVoteStatus() {
+        List<PlayerData> playerDataList = cache;
+
+        for (PlayerData playerData : playerDataList) {
+            playerData.voteStatus = false;
+        }
+        savePlayers(playerDataList);
+    }
+
     public static String getPlayerFaction(String uuid) {
         List<PlayerData> playerDataList = cache;
         String playerFaction = "";

@@ -2,6 +2,7 @@ package ch.swaford.servermanager;
 
 import ch.swaford.servermanager.classement.ClassementManager;
 import ch.swaford.servermanager.classement.ClassementCache;
+import ch.swaford.servermanager.explosion.ExplosionManager;
 import ch.swaford.servermanager.shop.ShopManager;
 import net.minecraft.server.MinecraftServer;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -32,9 +33,13 @@ public class TimeManager {
             }
         }
 
+        if (event.getServer().getTickCount() % 100 == 0) {
+
+        }
+
         //toutes les 20 secondes
         if (event.getServer().getTickCount() % 400 == 0) {
-            ShopManager.priceFluctuation();
+            //ShopManager.priceFluctuation();
             ClassementCache.SaveClassement();
             ClassementManager.updateNationScore();
             ClassementManager.updateNationList();
@@ -43,6 +48,9 @@ public class TimeManager {
 
     @SubscribeEvent
     public void OnServerStart(ServerStartedEvent event) {
+
+        ExplosionManager.restoreAll(event.getServer());
+
         String stored = ServerDataManager.getLastUpdate();
         if (stored == null || stored.equals("0")) {
             LocalDateTime nextTime = LocalDate.now().plusDays(1).atStartOfDay();
@@ -70,7 +78,7 @@ public class TimeManager {
         ClassementManager.applyScoreReductionRate();
         ServerDataManager.giveSalary(server);
         ShopManager.updateShopItem();
-        FactionManager.resetVoteStatus();
+        PlayerDataBase.resetVoteStatus();
         ServerDataManager.clearSession();
     }
 }

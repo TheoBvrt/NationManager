@@ -28,7 +28,6 @@ public class ClaimInteractionProtection {
 
         BlockState state = event.getLevel().getBlockState(pos);
         ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock());
-        System.out.println(blockId);
         if (blockId.getNamespace().equals("ballistix") && claimFaction.equals("server") && !player.hasPermissions(2)) {
             event.setCanceled(true);
             player.sendSystemMessage(Component.literal("§cAccès refusé : cet équipement militaire ne se trouve pas sur votre territoire."));

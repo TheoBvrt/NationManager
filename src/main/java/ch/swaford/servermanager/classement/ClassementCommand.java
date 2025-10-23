@@ -1,9 +1,7 @@
 package ch.swaford.servermanager.classement;
 
+import ch.swaford.servermanager.*;
 import ch.swaford.servermanager.classement.ClassementManager;
-import ch.swaford.servermanager.FactionManager;
-import ch.swaford.servermanager.Message;
-import ch.swaford.servermanager.PlayerDataBase;
 import ch.swaford.servermanager.networktransfer.ServerClassementPayload;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
@@ -27,38 +25,34 @@ public class ClassementCommand {
                             if (!ch.swaford.servermanager.classement.ClassementManager.getStatusOfClassement("nation_diplomatie"))
                                 return 0;
                             String playerUuid = ctx.getSource().getPlayerOrException().getStringUUID();
-                            if (PlayerDataBase.playerHasFaction(playerUuid)) {
-                                String playerFaction = PlayerDataBase.getPlayerFaction(playerUuid);
-                                if (FactionManager.playerIsOpInFaction(playerUuid, playerFaction)) {
-                                    if (!FactionManager.getVote(playerFaction)) {
-                                        String targetFaction = StringArgumentType.getString(ctx, "nation_name");
-                                        if (!playerFaction.equals(targetFaction)) {
-                                            FactionManager.setVoteStatus(true, playerFaction);
-                                            ClassementManager.addVote(targetFaction);
-                                            ctx.getSource().sendSuccess(
-                                                    () -> Component.literal("§eVous avez voté pour " + targetFaction), false
-                                            );
-                                        } else {
-                                            ctx.getSource().sendFailure(
-                                                    Component.literal("§cVous ne pouvez pas voter en faveur de votre nation")
-                                            );
-                                            return 0;
-                                        }
-                                    } else {
-                                        ctx.getSource().sendFailure(
-                                                Component.literal("§cVous avez déjà utilisé votre voix")
-                                        );
-                                        return 0;
-                                    }
+                            String playerFaction = PlayerDataBase.getPlayerFaction(playerUuid);
+                            if (!PlayerDataBase.getVote(playerUuid)) {
+                                String targetFaction = StringArgumentType.getString(ctx, "nation_name");
+                                if (!FactionManager.factionExist(targetFaction)) {
+                                    ctx.getSource().sendFailure(
+                                            Component.literal("§cNation introuvable")
+                                    );
+                                    return 0;
+                                }
+                                if (!playerFaction.equals(targetFaction)) {
+                                    PlayerDataBase.setVoteStatus(true, playerUuid);
+                                    ClassementManager.addVote(targetFaction);
+                                    ctx.getSource().sendSuccess(
+                                            () -> Component.literal("§eVous avez voté pour " + targetFaction), false
+                                    );
+                                    EconomyManager.addMoney(playerUuid, 150);
+                                    ctx.getSource().sendSuccess(
+                                            () -> Component.literal("§eVous avez reçu 150€"), false
+                                    );
                                 } else {
                                     ctx.getSource().sendFailure(
-                                            Component.literal("§cVous n'avez pas les permissions pour voter")
+                                            Component.literal("§cVous ne pouvez pas voter en faveur de votre nation")
                                     );
                                     return 0;
                                 }
                             } else {
                                 ctx.getSource().sendFailure(
-                                        Component.literal(Message.ERROR_PLAYER_DONT_HAVE_FACTION)
+                                        Component.literal("§cVous avez déjà utilisé votre voix")
                                 );
                                 return 0;
                             }

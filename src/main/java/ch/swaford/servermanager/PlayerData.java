@@ -5,6 +5,7 @@ public class PlayerData {
     String name;
     int balance;
     String faction;
+    boolean voteStatus = false;
 
     PlayerData(String uuid, String name) {
         this.uuid = uuid;

@@ -135,16 +135,16 @@ public class ShopManager {
         int price = getSellPrice(itemToSell, quantity);
         for (ShopItemData shopItemData : shopItemDataList) {
             if (shopItemData.itemId.equals(itemToSell.toString())) {
-                if (!shopItemData.limited)
-                    shopItemData.totalSell += itemCount;
+//                if (!shopItemData.limited)
+//                    shopItemData.totalSell += itemCount;
                 EconomyManager.addMoney(player.getStringUUID(), price);
                 player.sendSystemMessage(Component.literal("§lShop : vous avez vendu §e§lx" + itemCount + " §e§l" + displayName + "§f§l pour §e§l" +price + "€"));
                 ClassementEvent.onSell(player, itemCount);
                 if (shopItemData.limited)
                     shopItemData.maxBuyValue += itemCount;
                 else {
-                    shopItemData.sellPrice = (int) (shopItemData.basePrice * ((double)shopItemData.totalBuy / shopItemData.totalSell));
-                    shopItemData.buyPrice = (int) (shopItemData.sellPrice * 1.1f);
+//                    shopItemData.sellPrice = (int) (shopItemData.basePrice * ((double)shopItemData.totalBuy / shopItemData.totalSell));
+//                    shopItemData.buyPrice = (int) (shopItemData.sellPrice * 1.1f);
                 }
             }
         }
@@ -169,15 +169,15 @@ public class ShopManager {
         int price = getBuyPrice(itemToBuy,  quantity);
         for (ShopItemData shopItemData : shopItemDataList) {
             if (shopItemData.itemId.equals(itemToBuy.toString())) {
-                if (!shopItemData.limited)
-                    shopItemData.totalBuy += quantity;
+//                if (!shopItemData.limited)
+//                    shopItemData.totalBuy += quantity;
                 EconomyManager.subMoney(player.getStringUUID(), price);
                 player.sendSystemMessage(Component.literal("§lShop : vous avez acheté §e§lx" + quantity + " §e§l" + displayName + "§f§l pour §e§l" + price + "€"));
                 if (shopItemData.limited)
                     shopItemData.maxBuyValue -= quantity;
                 else {
-                    shopItemData.sellPrice = (int) (shopItemData.basePrice * ((double)shopItemData.totalBuy / shopItemData.totalSell));
-                    shopItemData.buyPrice = (int) (shopItemData.sellPrice * 1.1f);
+//                    shopItemData.sellPrice = (int) (shopItemData.basePrice * ((double)shopItemData.totalBuy / shopItemData.totalSell));
+//                    shopItemData.buyPrice = (int) (shopItemData.sellPrice * 1.1f);
                 }
             }
         }
@@ -263,11 +263,36 @@ public class ShopManager {
         return (int) (a / b);
     }
 
+    public static boolean restockItem(String item)
+    {
+        ShopData shopData = loadShop();
+        List<ShopItemData> shopItemDataList = getShopItemDataByCategory("diplomatie", shopData);
+
+        for (ShopItemData shopItemData : shopItemDataList) {
+            if (shopItemData.itemId.equals(item)) {
+                if (shopItemData.limited) {
+                    shopItemData.maxBuyValue = shopItemData.defaultBuyValue;
+                    saveShopData(shopData);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     public static void updateShopItem() {
         ShopData shopData = loadShop();
         List<List<ShopItemData>> listOfItemByCategory = new ArrayList<>();
         for (String category : shopData.categories) {
-            listOfItemByCategory.add(getShopItemDataByCategory(category, shopData));
+            if (!category.equals("militaire")) {
+                listOfItemByCategory.add(getShopItemDataByCategory(category, shopData));
+            }
+        }
+
+        //all military item are enable, but the price is not updated
+        List<ShopItemData> militaireShopItemDataList = getShopItemDataByCategory("militaire", shopData);
+        for (ShopItemData shopItemData : militaireShopItemDataList) {
+            shopItemData.enabled = true;
         }
 
         for (List<ShopItemData> shopItemDataList : listOfItemByCategory) {
@@ -277,7 +302,6 @@ public class ShopManager {
 
             if (shopItemDataList.size() <= 4) {
                 for (ShopItemData shopItemData : shopItemDataList) {
-                    System.out.println("test");
                     if (shopItemData.limited)
                         shopItemData.maxBuyValue = shopItemData.defaultBuyValue;
                     shopItemData.enabled = true;

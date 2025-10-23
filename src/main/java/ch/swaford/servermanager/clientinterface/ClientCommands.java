@@ -41,7 +41,7 @@ public class ClientCommands {
                         .executes(ctx -> {
                             Minecraft mc = Minecraft.getInstance();
                             if (mc.player != null && mc.getConnection() != null) {
-                                mc.getConnection().send(new RequestPlayerData(3));
+                                mc.getConnection().send(new RequestPlayerData(4));
                             }
                             return 1;
                         })

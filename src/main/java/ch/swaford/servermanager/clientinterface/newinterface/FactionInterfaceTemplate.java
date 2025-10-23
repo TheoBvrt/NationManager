@@ -67,7 +67,7 @@ public class FactionInterfaceTemplate {
         menuTop.child(button(1, 11)); //membre
         menuTop.child(button(4, 11)); //classement
         menuTop.child(button(2, 11)); //bank
-        menuTop.child(button(3, 11)); //shop
+        menuTop.child(button(5, 11)); //shop
 
         FlowLayout mainPanel = (FlowLayout) Containers.verticalFlow(Sizing.fill(93), Sizing.fill(100))
                 .verticalAlignment(VerticalAlignment.TOP)
@@ -96,6 +96,10 @@ public class FactionInterfaceTemplate {
 
             if (screen == 3) {
                 Objects.requireNonNull(minecraftInstance.getConnection()).send(new RequestPlayerData(3));
+            }
+
+            if (screen == 5) {
+                Objects.requireNonNull(minecraftInstance.getConnection()).send(new RequestPlayerData(4));
             }
 
             Objects.requireNonNull(minecraftInstance.getConnection()).send(new RequestFactionData("server", screen));

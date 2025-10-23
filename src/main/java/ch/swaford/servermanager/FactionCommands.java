@@ -1,9 +1,12 @@
 package ch.swaford.servermanager;
 
 import ballistix.api.event.BlastDamageEvent;
+import ballistix.api.event.BlastEvent;
 import ballistix.api.event.LaunchEvent;
 import ch.swaford.servermanager.classement.ClassementManager;
 import ch.swaford.servermanager.classement.ClassementCache;
+import ch.swaford.servermanager.explosion.ExplosionManager;
+import ch.swaford.servermanager.explosion.StoredBlock;
 import ch.swaford.servermanager.networktransfer.ServerClaimDataPayload;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -11,6 +14,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -31,6 +35,10 @@ import net.minecraft.world.item.BannerItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.scores.*;
 import net.minecraft.world.scores.criteria.ObjectiveCriteria;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -96,7 +104,7 @@ public class FactionCommands {
 
         if (PlayerDataBase.playerHasFaction(target.getStringUUID())) {
             int balance = FactionManager.getBalance(target.getStringUUID());
-            int amount = (int)(balance * 0.02);
+            int amount = (int)(balance * ServerVariable.killPlayerMalusPercent);
             if (balance >= amount && balance > 0) {
                 FactionManager.subMoney(PlayerDataBase.getPlayerFaction(target.getStringUUID()), amount);
             }
@@ -109,10 +117,11 @@ public class FactionCommands {
 
         if (!(livingEntity instanceof Player target)) return;
         if (PlayerDataBase.playerHasFaction(target.getStringUUID())) {
-            int balance = FactionManager.getBalance(target.getStringUUID());
-            int amount = (int)(balance * 0.02);
+            String factionName = PlayerDataBase.getPlayerFaction(target.getStringUUID());
+            int balance = FactionManager.getBalance(factionName);
+            int amount = (int)(balance * ServerVariable.killPlayerMalusPercent);
             if (balance >= amount && balance > 0) {
-                FactionManager.subMoney(PlayerDataBase.getPlayerFaction(target.getStringUUID()), amount);
+                FactionManager.subMoney(factionName, amount);
             }
         }
     }
@@ -129,6 +138,127 @@ public class FactionCommands {
                 )),
                 false // false = message non "system" (pas dans la console)
         );
+    }
+
+    private void performExplosion(int radius, ServerLevel level, BlockPos pos)
+    {
+        List<BlockState> palette = new ArrayList<>();
+        List<StoredBlock> blocks = new ArrayList<>();
+
+        BlockPos center = pos;
+        float randomness = 0.85f;
+        int maxDepth = 3;
+        Set<Block> blacklist = Set.of(
+                Blocks.BEDROCK,
+                Blocks.END_PORTAL_FRAME,
+                Blocks.COMMAND_BLOCK,
+                Blocks.BEACON,
+                Blocks.ENDER_CHEST
+        );
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -radius; dy <= radius; dy++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (dy < -maxDepth) continue;
+                    double distanceSq = dx * dx + dy * dy + dz * dz;
+                    if (distanceSq <= radius * radius) {
+
+                        BlockPos targetPos = center.offset(dx, dy, dz);
+                        BlockState state = level.getBlockState(targetPos);
+
+                        if (!state.isAir() && !blacklist.contains(state.getBlock())) {
+                            // ✅ on capture avant destruction
+                            if (!palette.contains(state)) {
+                                palette.add(state);
+                            }
+                            int id = palette.indexOf(state);
+
+                            // Récupérer le NBT si BlockEntity
+                            CompoundTag nbt = null;
+                            BlockEntity be = level.getBlockEntity(targetPos);
+                            if (be != null) {
+                                nbt = be.saveWithFullMetadata(level.registryAccess());
+                            }
+
+                            blocks.add(new StoredBlock(
+                                    targetPos.getX(),
+                                    targetPos.getY(),
+                                    targetPos.getZ(),
+                                    id,
+                                    nbt
+                            ));
+                        }
+
+//                        if (!state.isAir() && !blacklist.contains(state.getBlock())) {
+//                            if (dy == -maxDepth) {
+//                                if (level.random.nextFloat() < randomness) {
+//                                    if (!palette.contains(state)) {
+//                                        palette.add(state);
+//                                    }
+//                                    int id = palette.indexOf(state);
+//                                    blocks.add(new StoredBlock(
+//                                            targetPos.getX(),
+//                                            targetPos.getY(),
+//                                            targetPos.getZ(),
+//                                            id,
+//                                            null
+//                                    ));
+//                                    level.destroyBlock(targetPos, true);
+//                                }
+//                            } else {
+//                                if (!palette.contains(state)) {
+//                                    palette.add(state);
+//                                }
+//                                int id = palette.indexOf(state);
+//                                blocks.add(new StoredBlock(
+//                                        targetPos.getX(),
+//                                        targetPos.getY(),
+//                                        targetPos.getZ(),
+//                                        id,
+//                                        null
+//                                ));
+//                                level.destroyBlock(targetPos, true);
+//                            }
+//                        }
+                    }
+                }
+            }
+        }
+        for (StoredBlock block : blocks) {
+            BlockPos targetPos = new BlockPos(block.x(), block.y(), block.z());
+            if (!blacklist.contains(level.getBlockState(targetPos).getBlock())) {
+                level.destroyBlock(targetPos, true);
+            }
+        }
+        ExplosionManager.createExplosion(palette, blocks, level.dimension());
+    }
+
+    @SubscribeEvent
+    public void onBlastEvent(BlastEvent.PostBlastEvent event) {
+        if (event.world.isClientSide) return;
+        ChunkPos chunkPos = new ChunkPos(event.iExplosion.position);
+        String claimOwner = ClaimManager.getClaimOwner(chunkPos.x, chunkPos.z);
+
+        ResourceLocation id = event.iExplosion.getBlastType().id();
+
+        if (id.toString().equals("ballistix:obsidian")) {
+            performExplosion(ServerVariable.obsidianBlastBlockDamageRadius, (ServerLevel) event.world, event.iExplosion.position) ;
+        } else if (id.toString().equals("ballistix:thermobaric")) {
+            //performExplosion(ServerVariable.thermobaricBlastBlockDamageRadius, (ServerLevel) event.world, event.iExplosion.position) ;
+        }
+
+        if (claimOwner.equals("server")) {
+            return;
+        }
+        int balance = FactionManager.getBalance(claimOwner);
+        int amount = 0;
+        if (id.toString().equals("ballistix:obsidian")) {
+            amount = (int)(balance * ServerVariable.obsidianBlastMalusPercent);
+        } else if (id.toString().equals("ballistix:thermobaric")) {
+            amount = (int)(balance * ServerVariable.thermobaricBlastMalusPercent);
+        }
+        if (balance >= amount && balance > 0) {
+            FactionManager.subMoney(claimOwner, amount);
+        }
     }
 
     @SubscribeEvent

@@ -5,6 +5,8 @@ import ch.swaford.servermanager.clientinterface.ClientCommands;
 import ch.swaford.servermanager.clientinterface.ClientKeyManager;
 import ch.swaford.servermanager.clientinterface.ClientSetup;
 import ch.swaford.servermanager.clientinterface.JourneyMapPlugin;
+import ch.swaford.servermanager.explosion.ExplosionCommands;
+import ch.swaford.servermanager.explosion.ExplosionManager;
 import ch.swaford.servermanager.networktransfer.*;
 import ch.swaford.servermanager.shop.*;
 import journeymap.api.v2.client.display.PolygonOverlay;
@@ -82,6 +84,7 @@ public class ServerManager {
         NeoForge.EVENT_BUS.register(new ClassementEvent());
         NeoForge.EVENT_BUS.register(new ClassementCommand());
         NeoForge.EVENT_BUS.register(new ClaimInteractionProtection());
+        NeoForge.EVENT_BUS.register(new ExplosionCommands());
 
         if (FMLEnvironment.dist == Dist.CLIENT) {
             NeoForge.EVENT_BUS.register(ClientCommands.class);
@@ -310,6 +313,7 @@ public class ServerManager {
                     player.getName().getString()
             );
             PlayerDataBase.addPlayer(newPlayerData);
+            EconomyManager.setMoney(newUuid, 1000);
         }
         if (!ServerDataManager.isPlayerConnectedToday(newUuid)) {
             ServerDataManager.addPlayerConnectedToday(newUuid);

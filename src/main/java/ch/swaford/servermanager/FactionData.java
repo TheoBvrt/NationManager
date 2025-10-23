@@ -18,7 +18,6 @@ public class FactionData {
     int rank;
     List<String> officers;
     List<String> members;
-    boolean voted;
     public FactionData(String name, String ownerUuid, int color) {
         this.name = name;
         this.ownerUuid = ownerUuid;
@@ -32,6 +31,5 @@ public class FactionData {
         this.description = "Changer votre description avec /nation description";
         this.bannerTag = "";
         this.color = color;
-        this.voted = false;
     }
 }
