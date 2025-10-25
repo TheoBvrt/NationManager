@@ -5,8 +5,10 @@ import ch.swaford.servermanager.clientinterface.ClientCommands;
 import ch.swaford.servermanager.clientinterface.ClientKeyManager;
 import ch.swaford.servermanager.clientinterface.ClientSetup;
 import ch.swaford.servermanager.clientinterface.JourneyMapPlugin;
+import ch.swaford.servermanager.eventmanager.EventManager;
 import ch.swaford.servermanager.explosion.ExplosionCommands;
 import ch.swaford.servermanager.explosion.ExplosionManager;
+import ch.swaford.servermanager.logger.CustomLogger;
 import ch.swaford.servermanager.networktransfer.*;
 import ch.swaford.servermanager.shop.*;
 import journeymap.api.v2.client.display.PolygonOverlay;
@@ -85,6 +87,8 @@ public class ServerManager {
         NeoForge.EVENT_BUS.register(new ClassementCommand());
         NeoForge.EVENT_BUS.register(new ClaimInteractionProtection());
         NeoForge.EVENT_BUS.register(new ExplosionCommands());
+        NeoForge.EVENT_BUS.register(new CustomLogger());
+        NeoForge.EVENT_BUS.register(new EventManager());
 
         if (FMLEnvironment.dist == Dist.CLIENT) {
             NeoForge.EVENT_BUS.register(ClientCommands.class);
@@ -103,6 +107,8 @@ public class ServerManager {
                 (payload, context) -> {
                     String factionName = payload.factionName();
                     ServerPlayer player = (ServerPlayer) context.player();
+                    String playerName = player.getGameProfile().getName();
+                    CustomLogger.logPayload(RequestFactionData.ID.toString(), playerName);
                     if (factionName.equals("server")) {
                         if (PlayerDataBase.playerHasFaction(player.getStringUUID())) {
                             factionName = PlayerDataBase.getPlayerFaction(player.getStringUUID());
@@ -114,7 +120,6 @@ public class ServerManager {
                             return;
                         }
                     }
-                    System.out.println("Request faction data by " + player.getStringUUID());
                     player.connection.send(new ServerFactionDataPayload(
                             new ServerFactionData(
                                     factionName == null ? "server" : factionName,
@@ -147,6 +152,8 @@ public class ServerManager {
                 (payload, context) -> {
                     context.enqueueWork(() -> {
                         ServerPlayer player = (ServerPlayer) context.player();
+                        String playerName = player.getGameProfile().getName();
+                        CustomLogger.logPayload(RequestClassementData.ID.toString(), playerName);
                         ServerClassementPayload serverClassementPayload = new ServerClassementPayload(ClassementManager.getClassementDataList());
                         PacketDistributor.sendToPlayer(player, serverClassementPayload);
                     });
@@ -159,6 +166,8 @@ public class ServerManager {
                 (payload, context) -> {
                     context.enqueueWork(() -> {
                         ServerPlayer player = (ServerPlayer) context.player();
+                        String playerName = player.getGameProfile().getName();
+                        CustomLogger.logPayload(RequestPlayerData.ID.toString(), playerName);
                         ServerCientDataPayload serverCientDataPayload = new ServerCientDataPayload(PlayerDataBase.getServerClientData(player.getStringUUID()), payload.screen());
                         PacketDistributor.sendToPlayer(player, serverCientDataPayload);
                     });

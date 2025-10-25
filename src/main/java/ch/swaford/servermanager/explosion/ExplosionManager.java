@@ -2,6 +2,7 @@ package ch.swaford.servermanager.explosion;
 
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
@@ -15,15 +16,21 @@ import net.minecraft.world.level.ClipBlockStateContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.FallingBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.AttachFace;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 
 import java.io.*;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
-import java.util.List;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class ExplosionManager {
     public static void saveExplosion(StoredExplosion snapshot, Path file) throws IOException {
@@ -100,15 +107,134 @@ public class ExplosionManager {
         }
     }
 
+    public static void performExplosion(int radius, ServerLevel level, BlockPos position)
+    {
+        List<BlockState> palette = new ArrayList<>();
+        List<StoredBlock> blocks = new ArrayList<>();
+        Set<BlockPos> blockToDestroy = new HashSet<>();
+
+        BlockPos center = position;
+        float randomness = 0.85f;
+        int maxDepth = 3;
+        Set<Block> blacklist = Set.of(
+                Blocks.BEDROCK,
+                Blocks.END_PORTAL_FRAME,
+                Blocks.COMMAND_BLOCK,
+                Blocks.BEACON,
+                Blocks.ENDER_CHEST,
+                Blocks.AIR,
+                Blocks.WATER
+        );
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -radius; dy <= radius; dy++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (dy < -maxDepth) continue;
+                    double distanceSq = dx * dx + dy * dy + dz * dz;
+                    if (distanceSq <= radius * radius) {
+
+                        BlockPos targetPos = center.offset(dx, dy, dz);
+                        BlockState state = level.getBlockState(targetPos);
+
+                        if (!blacklist.contains(state.getBlock())) {
+                            if (!palette.contains(state)) {
+                                palette.add(state);
+                            }
+                            int id = palette.indexOf(state);
+
+                            CompoundTag nbt = null;
+                            BlockEntity be = level.getBlockEntity(targetPos);
+                            if (be != null) {
+                                nbt = be.saveWithFullMetadata(level.registryAccess());
+                            }
+
+                            blockToDestroy.add(targetPos);
+                            blocks.add(new StoredBlock(
+                                    targetPos.getX(),
+                                    targetPos.getY(),
+                                    targetPos.getZ(),
+                                    id,
+                                    nbt
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        Set<StoredBlock> extraCheck = new HashSet<>();
+
+        for (StoredBlock block : blocks) {
+            BlockPos pos = new BlockPos(block.x(),  block.y(), block.z());
+            for (Direction dir : Direction.values()) {
+                BlockPos neighborPos = pos.relative(dir);
+
+                if (blockToDestroy.contains(neighborPos)) continue;
+
+                BlockState state = level.getBlockState(neighborPos);
+
+                if (blacklist.contains(state.getBlock())) continue;
+
+                if (!palette.contains(state)) {
+                    palette.add(state);
+                }
+
+                int id = palette.indexOf(state);
+                CompoundTag nbt = null;
+                BlockEntity be = level.getBlockEntity(neighborPos);
+                if (be != null) {
+                    nbt = be.saveWithFullMetadata(level.registryAccess());
+                }
+
+                StoredBlock stored = new StoredBlock(
+                        neighborPos.getX(),
+                        neighborPos.getY(),
+                        neighborPos.getZ(),
+                        id,
+                        nbt
+                );
+
+                extraCheck.add(stored);
+            }
+        }
+
+        for (StoredBlock block : blocks) {
+            BlockPos targetPos = new BlockPos(block.x(), block.y(), block.z());
+            if (!blacklist.contains(level.getBlockState(targetPos).getBlock())) {
+                level.destroyBlock(targetPos, false);
+            }
+        }
+
+        for (StoredBlock block : extraCheck) {
+            BlockPos targetPos = new BlockPos(block.x(), block.y(), block.z());
+            BlockState blockstate = level.getBlockState(targetPos);
+
+            if (blockstate.isAir()) {
+                boolean already = blocks.stream().anyMatch(
+                        b -> b.x() == targetPos.getX() && b.y() == targetPos.getY() && b.z() == targetPos.getZ()
+                );
+                if (!already) {
+                    blocks.add(block);
+                }
+            }
+        }
+        ExplosionManager.createExplosion(palette, blocks, level.dimension(), center);
+    }
+
     public static void restoreExplosion(MinecraftServer server, String file) {
+        Path restoredPath = Path.of("explosions", "restored", file);
         Path path = Path.of("explosions", file);
         try {
             StoredExplosion storedExplosion = ExplosionManager.loadExplosion(path);
-            System.out.println(storedExplosion);
+            if (storedExplosion.blockList().isEmpty() || storedExplosion.palette().isEmpty()) {
+                Files.move(path, restoredPath, StandardCopyOption.REPLACE_EXISTING);
+                return;
+            }
+
             BlockPos tmp = new BlockPos(storedExplosion.blockList().getFirst().x(),
                     storedExplosion.blockList().getFirst().y(), storedExplosion.blockList().getFirst().z());
 
             ServerLevel level = server.getLevel(storedExplosion.dimension());
+
 
             int radius = 1;
             ChunkPos center = new ChunkPos(tmp);
@@ -124,10 +250,9 @@ public class ExplosionManager {
                 BlockPos blockPos = new BlockPos(block.x(), block.y(), block.z());
                 BlockState check = level.getBlockState(blockPos);
                 BlockState state = storedExplosion.palette().get(block.paletteId());
-                if (check.isAir())
+                if (check.isAir() || check.getBlock() == Blocks.WATER)
                     level.setBlock(blockPos, state, 3);
             }
-            Path restoredPath = Path.of("explosions", "restored", file);
             Files.move(path, restoredPath, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -154,7 +279,7 @@ public class ExplosionManager {
         }
     }
 
-    public static void createExplosion(List<BlockState> palette, List<StoredBlock> blocks, ResourceKey<Level> dimension)
+    public static void createExplosion(List<BlockState> palette, List<StoredBlock> blocks, ResourceKey<Level> dimension, BlockPos center)
     {
         StoredExplosion storedExplosion = new StoredExplosion(palette, blocks, dimension);
         Path folder = Path.of("explosions");
@@ -164,7 +289,10 @@ public class ExplosionManager {
             throw new RuntimeException(e);
         }
         try {
-            String fileName = "EXPL_1" + System.currentTimeMillis() + ".exp";
+            LocalDateTime now = LocalDateTime.now();
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH_mm_ss");
+            String id = center.getX() + "." + center.getY() + "." + center.getZ() + "_" + formatter.format(now);
+            String fileName = "EXPL_" + id + "_.exp";
             Path file = folder.resolve(fileName);
             ExplosionManager.saveExplosion(storedExplosion, file);
         } catch (IOException e) {

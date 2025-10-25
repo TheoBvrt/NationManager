@@ -15,6 +15,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -37,8 +38,11 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.FallingBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.AttachFace;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.scores.*;
 import net.minecraft.world.scores.criteria.ObjectiveCriteria;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -51,6 +55,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.text.NumberFormat;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /*
  * Classe FactionCommands
@@ -95,268 +100,6 @@ public class FactionCommands {
     int claimPrice = ServerVariable.claimBasePrice;
 
     @SubscribeEvent
-    public void onEntityKilled(LivingDeathEvent event) {
-        LivingEntity livingEntity = event.getEntity();
-        DamageSource damageSource = event.getSource();
-        if (!(damageSource.getEntity() instanceof Player)) return;
-
-        if (!(livingEntity instanceof Player target)) return;
-
-        if (PlayerDataBase.playerHasFaction(target.getStringUUID())) {
-            int balance = FactionManager.getBalance(target.getStringUUID());
-            int amount = (int)(balance * ServerVariable.killPlayerMalusPercent);
-            if (balance >= amount && balance > 0) {
-                FactionManager.subMoney(PlayerDataBase.getPlayerFaction(target.getStringUUID()), amount);
-            }
-        }
-    }
-
-    @SubscribeEvent
-    public void onBlastKill(BlastDamageEvent.BlastDamageMissileEvent event) {
-        LivingEntity livingEntity = event.entity;
-
-        if (!(livingEntity instanceof Player target)) return;
-        if (PlayerDataBase.playerHasFaction(target.getStringUUID())) {
-            String factionName = PlayerDataBase.getPlayerFaction(target.getStringUUID());
-            int balance = FactionManager.getBalance(factionName);
-            int amount = (int)(balance * ServerVariable.killPlayerMalusPercent);
-            if (balance >= amount && balance > 0) {
-                FactionManager.subMoney(factionName, amount);
-            }
-        }
-    }
-
-    @SubscribeEvent
-    public void onLaunch(LaunchEvent.LaunchMissileEvent event) {
-        MinecraftServer server = event.world.getServer();
-        ChunkPos chunkPos = new ChunkPos(event.startPos);
-        String claimOwner = ClaimManager.getClaimOwner(chunkPos.x, chunkPos.z);
-        server.getPlayerList().broadcastSystemMessage(
-                Component.literal(String.format(
-                        "§7Lancement de missile détecté depuis §e[%s]§7.",
-                        claimOwner
-                )),
-                false // false = message non "system" (pas dans la console)
-        );
-    }
-
-    private void performExplosion(int radius, ServerLevel level, BlockPos pos)
-    {
-        List<BlockState> palette = new ArrayList<>();
-        List<StoredBlock> blocks = new ArrayList<>();
-
-        BlockPos center = pos;
-        float randomness = 0.85f;
-        int maxDepth = 3;
-        Set<Block> blacklist = Set.of(
-                Blocks.BEDROCK,
-                Blocks.END_PORTAL_FRAME,
-                Blocks.COMMAND_BLOCK,
-                Blocks.BEACON,
-                Blocks.ENDER_CHEST
-        );
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dy = -radius; dy <= radius; dy++) {
-                for (int dz = -radius; dz <= radius; dz++) {
-                    if (dy < -maxDepth) continue;
-                    double distanceSq = dx * dx + dy * dy + dz * dz;
-                    if (distanceSq <= radius * radius) {
-
-                        BlockPos targetPos = center.offset(dx, dy, dz);
-                        BlockState state = level.getBlockState(targetPos);
-
-                        if (!state.isAir() && !blacklist.contains(state.getBlock())) {
-                            // ✅ on capture avant destruction
-                            if (!palette.contains(state)) {
-                                palette.add(state);
-                            }
-                            int id = palette.indexOf(state);
-
-                            // Récupérer le NBT si BlockEntity
-                            CompoundTag nbt = null;
-                            BlockEntity be = level.getBlockEntity(targetPos);
-                            if (be != null) {
-                                nbt = be.saveWithFullMetadata(level.registryAccess());
-                            }
-
-                            blocks.add(new StoredBlock(
-                                    targetPos.getX(),
-                                    targetPos.getY(),
-                                    targetPos.getZ(),
-                                    id,
-                                    nbt
-                            ));
-                        }
-
-//                        if (!state.isAir() && !blacklist.contains(state.getBlock())) {
-//                            if (dy == -maxDepth) {
-//                                if (level.random.nextFloat() < randomness) {
-//                                    if (!palette.contains(state)) {
-//                                        palette.add(state);
-//                                    }
-//                                    int id = palette.indexOf(state);
-//                                    blocks.add(new StoredBlock(
-//                                            targetPos.getX(),
-//                                            targetPos.getY(),
-//                                            targetPos.getZ(),
-//                                            id,
-//                                            null
-//                                    ));
-//                                    level.destroyBlock(targetPos, true);
-//                                }
-//                            } else {
-//                                if (!palette.contains(state)) {
-//                                    palette.add(state);
-//                                }
-//                                int id = palette.indexOf(state);
-//                                blocks.add(new StoredBlock(
-//                                        targetPos.getX(),
-//                                        targetPos.getY(),
-//                                        targetPos.getZ(),
-//                                        id,
-//                                        null
-//                                ));
-//                                level.destroyBlock(targetPos, true);
-//                            }
-//                        }
-                    }
-                }
-            }
-        }
-        for (StoredBlock block : blocks) {
-            BlockPos targetPos = new BlockPos(block.x(), block.y(), block.z());
-            if (!blacklist.contains(level.getBlockState(targetPos).getBlock())) {
-                level.destroyBlock(targetPos, true);
-            }
-        }
-        ExplosionManager.createExplosion(palette, blocks, level.dimension());
-    }
-
-    @SubscribeEvent
-    public void onBlastEvent(BlastEvent.PostBlastEvent event) {
-        if (event.world.isClientSide) return;
-        ChunkPos chunkPos = new ChunkPos(event.iExplosion.position);
-        String claimOwner = ClaimManager.getClaimOwner(chunkPos.x, chunkPos.z);
-
-        ResourceLocation id = event.iExplosion.getBlastType().id();
-
-        if (id.toString().equals("ballistix:obsidian")) {
-            performExplosion(ServerVariable.obsidianBlastBlockDamageRadius, (ServerLevel) event.world, event.iExplosion.position) ;
-        } else if (id.toString().equals("ballistix:thermobaric")) {
-            //performExplosion(ServerVariable.thermobaricBlastBlockDamageRadius, (ServerLevel) event.world, event.iExplosion.position) ;
-        }
-
-        if (claimOwner.equals("server")) {
-            return;
-        }
-        int balance = FactionManager.getBalance(claimOwner);
-        int amount = 0;
-        if (id.toString().equals("ballistix:obsidian")) {
-            amount = (int)(balance * ServerVariable.obsidianBlastMalusPercent);
-        } else if (id.toString().equals("ballistix:thermobaric")) {
-            amount = (int)(balance * ServerVariable.thermobaricBlastMalusPercent);
-        }
-        if (balance >= amount && balance > 0) {
-            FactionManager.subMoney(claimOwner, amount);
-        }
-    }
-
-    @SubscribeEvent
-    public void onPlayerTick(PlayerTickEvent.Post event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) {
-            return;
-        }
-        updateChunkOwner(player);
-        if (player.tickCount % 20 == 0) {
-           updateScoreBoard(player);
-        }
-    }
-
-    private void updateScoreBoard(ServerPlayer player) {
-        Scoreboard scoreboard = player.getScoreboard();
-
-        String objectiveName = "personal_" + player.getStringUUID().substring(0, 8);
-        Objective old = scoreboard.getObjective(objectiveName);
-
-        if (old  != null) {
-            scoreboard.removeObjective(old);
-        }
-        /*
-        Objective objective = scoreboard.addObjective(
-                objectiveName,
-                ObjectiveCriteria.DUMMY,
-                Component.literal("§f§l§nCapitalisons"),
-                ObjectiveCriteria.RenderType.INTEGER,
-                false,
-                null
-        );
-        scoreboard.setDisplayObjective(DisplaySlot.SIDEBAR, objective);
-
-        int money = EconomyManager.getPlayerBalance(player.getStringUUID());
-        String factionName = PlayerDataBase.getPlayerFaction(player.getStringUUID());
-
-        setLine(scoreboard, objective, "                             ", 11);
-        setLine(scoreboard, objective, "§f§l⋙ Argent", 10);
-        setLine(scoreboard, objective, "    §e" + String.format(Locale.FRANCE, "%,d", money) + " €", 9);
-        setLine(scoreboard, objective, " ", 8);
-        if (PlayerDataBase.playerHasFaction(player.getStringUUID())) {
-            int factionPower = FactionManager.getPower(factionName);
-            int factionBalance = FactionManager.getBalance(factionName);
-            setLine(scoreboard, objective, "§f§l⋙ Nation", 7);
-            setLine(scoreboard, objective, "    §e" + factionName, 6);
-            setLine(scoreboard, objective, "  ", 5);
-            setLine(scoreboard, objective, "§f§l⋙ Infos nation", 4);
-            setLine(scoreboard, objective, "    §e" + String.format(Locale.FRANCE, "%,d", factionPower) + " puissances", 3);
-            setLine(scoreboard, objective, "    §e" + String.format(Locale.FRANCE, "%,d", factionBalance) + " €", 2);
-            setLine(scoreboard, objective, "   ", 1);
-        }*/
-    }
-
-
-    // Outil pour ajouter une ligne
-    private void setLine(Scoreboard scoreboard, Objective objective, String text, int line) {
-        ScoreHolder holder = ScoreHolder.forNameOnly(text);
-        ScoreAccess access = scoreboard.getOrCreatePlayerScore(holder, objective);
-        access.set(line);
-    }
-
-    private void updateChunkOwner(ServerPlayer player) {
-        ChunkPos currentChunk = player.chunkPosition();
-
-        ItemStack item = player.getMainHandItem();
-        ResourceLocation id = BuiltInRegistries.ITEM.getKey(item.getItem());
-        if (!player.serverLevel().dimension().equals(Level.OVERWORLD))
-            return;
-        if (id.equals(ResourceLocation.parse("ballistix:radargun"))) {
-            return;
-        }
-
-        if (ClaimManager.checkIfChunkIsClaimed(currentChunk.x, currentChunk.z)) {
-            String playerFactionName = PlayerDataBase.getPlayerFaction(player.getStringUUID());
-            String chunkFactionName = ClaimManager.getClaimOwner(currentChunk.x, currentChunk.z);
-            int powerFaction = FactionManager.getPower(playerFactionName);
-            int targetFactionPower = FactionManager.getPower(chunkFactionName);
-            int newClaimPrice = claimPrice * (FactionManager.getPower(playerFactionName) / targetFactionPower);
-            if (playerFactionName.equals(chunkFactionName)) {
-                player.displayClientMessage(Component.literal("§e" + chunkFactionName), true);
-            }
-            else {
-                if (targetFactionPower > powerFaction) {
-                    player.displayClientMessage(Component.literal("§cClaim impossible"), true);
-                }
-                else
-                    player.displayClientMessage(Component.literal("§e" + chunkFactionName +  " prix de surclaim : " + NumberFormat.getInstance(Locale.FRENCH).format(newClaimPrice) + "€"), true);
-            }
-        } else {
-            String playerFactionName = PlayerDataBase.getPlayerFaction(player.getStringUUID());
-            if (playerFactionName.equals("server"))
-                player.displayClientMessage(Component.literal("§flibre"), true);
-            else
-                player.displayClientMessage(Component.literal("§flibre : " + NumberFormat.getInstance(Locale.FRENCH).format(FactionManager.getClaimPrice(playerFactionName)) + "€"), true);
-        }
-    }
-
-    @SubscribeEvent
     public void onRegisterCommands(RegisterCommandsEvent event) {
         CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
         dispatcher.register(Commands.literal("nation")
@@ -395,7 +138,7 @@ public class FactionCommands {
                                             FactionManager.createNewFaction(factionData);
                                             PlayerDataBase.setPlayerFaction(sourcePlayer.getStringUUID(), factionData.name);
                                             ctx.getSource().sendSuccess(
-                                                    () -> Component.literal(Message.SUCCESS_NATION_CREATE + newFactionName),true
+                                                    () -> Component.literal(Message.SUCCESS_NATION_CREATE + newFactionName),false
                                             );
                                         } else {
                                             ctx.getSource().sendFailure(
@@ -430,7 +173,7 @@ public class FactionCommands {
                                         ServerClaimDataPayload payload = new ServerClaimDataPayload(ClaimManager.getClaimList());
                                         PacketDistributor.sendToAllPlayers(payload);
                                         ctx.getSource().sendSuccess(
-                                                () -> Component.literal(Message.SUCCESS_NATION_DELETE),true
+                                                () -> Component.literal(Message.SUCCESS_NATION_DELETE),false
                                         );
                                         return 1;
                                     } else {
@@ -463,7 +206,7 @@ public class FactionCommands {
                                     FactionManager.removePlayer(sourcePlayerUuid, currentPlayerFaction);
                                     PlayerDataBase.removePlayerFaction(sourcePlayerUuid);
                                     ctx.getSource().sendSuccess(
-                                            () -> Component.literal("§eVous venez de quitter " + currentPlayerFaction), true
+                                            () -> Component.literal("§eVous venez de quitter " + currentPlayerFaction), false
                                     );
                                 }
                             } else {
@@ -491,7 +234,7 @@ public class FactionCommands {
                                             FactionManager.setFactionOwner(targetPlayer.getStringUUID(), currentPlayerFaction);
                                             PlayerDataBase.setPlayerFaction(targetPlayer.getStringUUID(), currentPlayerFaction);
                                             ctx.getSource().sendSuccess(
-                                                    () -> Component.literal("§eVous avez transféré la propriété de votre nation"), true
+                                                    () -> Component.literal("§eVous avez transféré la propriété de votre nation"), false
                                             );
                                         } else {
                                             ctx.getSource().sendFailure(
@@ -547,7 +290,7 @@ public class FactionCommands {
                                                         )
                                         );
                                         ctx.getSource().sendSuccess(
-                                                () -> Component.literal("§eVous avez invité " + targetPlayer.getName().getString() + " à rejoindre votre nation"), true
+                                                () -> Component.literal("§eVous avez invité " + targetPlayer.getName().getString() + " à rejoindre votre nation"), false
                                         );
                                     } else {
                                         ctx.getSource().sendFailure(
@@ -576,7 +319,7 @@ public class FactionCommands {
                                                 PlayerDataBase.setPlayerFaction(sourcePlayer.getStringUUID(), targetFaction);
                                                 FactionManager.addPlayerToFaction(sourcePlayer.getStringUUID(), targetFaction);
                                                 ctx.getSource().sendSuccess(
-                                                        () -> Component.literal("§eVous avez rejoint la nation " + targetFaction), true
+                                                        () -> Component.literal("§eVous avez rejoint la nation " + targetFaction), false
                                                 );
                                                 return 1;
                                             } else {
@@ -605,7 +348,7 @@ public class FactionCommands {
                                         FactionManager.removePlayer(targetPlayerUuid, currentPlayerFaction);
                                         PlayerDataBase.removePlayerFaction(targetPlayerUuid);
                                         ctx.getSource().sendSuccess(
-                                                () -> Component.literal("§eLe joueur " + targetPlayerName + " viens de quitter la nation"), true
+                                                () -> Component.literal("§eLe joueur " + targetPlayerName + " viens de quitter la nation"), false
                                         );
                                         return 1;
                                     } else {
@@ -744,7 +487,7 @@ public class FactionCommands {
                                         }
                                         FactionManager.promotePlayer(targetPlayerUuid, currentPlayerFaction);
                                         ctx.getSource().sendSuccess(
-                                                () -> Component.literal("§eLe joueur est désormais officier !"), true
+                                                () -> Component.literal("§eLe joueur est désormais officier !"), false
                                         );
                                         return 1;
                                     } else {
@@ -772,7 +515,7 @@ public class FactionCommands {
                                         }
                                         FactionManager.demotePlayer(targetPlayerUuid, currentPlayerFaction);
                                         ctx.getSource().sendSuccess(
-                                                () -> Component.literal("§eLe joueur est désormais membre"), true
+                                                () -> Component.literal("§eLe joueur est désormais membre"), false
                                         );
                                         return 1;
                                     } else {
@@ -800,7 +543,7 @@ public class FactionCommands {
                                         FactionManager.addMoney(currentPlayerFaction, amount);
                                         EconomyManager.subMoney(sourcePlayer.getStringUUID(), amount);
                                         ctx.getSource().sendSuccess(
-                                                () -> Component.literal("§eVous venez de déposer " + amount + " euros sur le compte de votre nation"), true
+                                                () -> Component.literal("§eVous venez de déposer " + amount + " euros sur le compte de votre nation"), false
                                         );
                                         return 1;
                                     } else {
@@ -877,7 +620,7 @@ public class FactionCommands {
                                         ClaimManager.deleteClaim(chunkX, chunkZ);
                                         FactionManager.decrementTotalChunk(currentPlayerFaction);
                                         ctx.getSource().sendSuccess(
-                                                () -> Component.literal("§eVous n’êtes plus propriétaire de ce territoire !"), true
+                                                () -> Component.literal("§eVous n’êtes plus propriétaire de ce territoire !"), false
                                         );
                                         return 1;
                                     } else {
@@ -932,7 +675,7 @@ public class FactionCommands {
                                             ClaimManager.createClaim(newClaimData);
                                             FactionManager.incrementTotalChunk(currentPlayerFaction);
                                             ctx.getSource().sendSuccess(
-                                                    () -> Component.literal("§eVous venez de réclamer le territoire pour " + factionClaimPrice + " euros"), true
+                                                    () -> Component.literal("§eVous venez de réclamer le territoire pour " + factionClaimPrice + " euros"), false
                                             );
                                             return 1;
                                         } else {
@@ -960,7 +703,7 @@ public class FactionCommands {
                                                     FactionManager.incrementTotalChunk(currentPlayerFaction);
                                                     FactionManager.decrementTotalChunk(defensingFactionName);
                                                     ctx.getSource().sendSuccess(
-                                                            () -> Component.literal("§eVous venez de voler le territoire de " + defensingFactionName + " pour " + newClaimPrice + " euros"), true
+                                                            () -> Component.literal("§eVous venez de voler le territoire de " + defensingFactionName + " pour " + newClaimPrice + " euros"), false
                                                     );
                                                     return 1;
                                                 } else {
