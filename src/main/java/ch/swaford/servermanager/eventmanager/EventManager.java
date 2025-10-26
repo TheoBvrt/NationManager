@@ -26,7 +26,10 @@ import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
 import java.text.NumberFormat;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
 
 public class EventManager {
 
@@ -45,19 +48,19 @@ public class EventManager {
             ExplosionManager.performExplosion(ServerVariable.thermobaricBlastBlockDamageRadius, (ServerLevel) event.world, event.iExplosion.position) ;
         }
 
-        if (claimOwner.equals("server")) {
-            return;
-        }
-        int balance = FactionManager.getBalance(claimOwner);
-        int amount = 0;
-        if (id.toString().equals("ballistix:obsidian")) {
-            amount = (int)(balance * ServerVariable.obsidianBlastMalusPercent);
-        } else if (id.toString().equals("ballistix:thermobaric")) {
-            amount = (int)(balance * ServerVariable.thermobaricBlastMalusPercent);
-        }
-        if (balance >= amount && balance > 0) {
-            FactionManager.subMoney(claimOwner, amount);
-        }
+//        if (claimOwner.equals("server")) {
+//            return;
+//        }
+//        int balance = FactionManager.getBalance(claimOwner);
+//        int amount = 0;
+//        if (id.toString().equals("ballistix:obsidian")) {
+//            amount = (int)(balance * ServerVariable.obsidianBlastMalusPercent);
+//        } else if (id.toString().equals("ballistix:thermobaric")) {
+//            amount = (int)(balance * ServerVariable.thermobaricBlastMalusPercent);
+//        }
+//        if (balance >= amount && balance > 0) {
+//            FactionManager.subMoney(claimOwner, amount);
+//        }
     }
 
     @SubscribeEvent
@@ -109,21 +112,31 @@ public class EventManager {
     }
 
     //Player
+
+    private static final Map<UUID, ChunkPos> lastChunkMap = new HashMap<>();
     @SubscribeEvent
     public void onPlayerTick(PlayerTickEvent.Post event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) {
+        if (!(event.getEntity() instanceof ServerPlayer player))
             return;
-        }
-        updateChunkOwner(player);
-    }
 
-    private void updateChunkOwner(ServerPlayer player) {
-        ChunkPos currentChunk = player.chunkPosition();
-
-        ItemStack item = player.getMainHandItem();
-        ResourceLocation id = BuiltInRegistries.ITEM.getKey(item.getItem());
         if (!player.serverLevel().dimension().equals(Level.OVERWORLD))
             return;
+
+        ChunkPos currentChunk = player.chunkPosition();
+
+        ChunkPos lastChunk = lastChunkMap.get(player.getUUID());
+
+        if (currentChunk.equals(lastChunk)) {
+            return;
+        }
+        lastChunkMap.put(player.getUUID(), currentChunk);
+        updateChunkOwner(player, currentChunk);
+    }
+
+    private static void updateChunkOwner(ServerPlayer player, ChunkPos currentChunk) {
+        ItemStack item = player.getMainHandItem();
+        ResourceLocation id = BuiltInRegistries.ITEM.getKey(item.getItem());
+
         if (id.equals(ResourceLocation.parse("ballistix:radargun"))) {
             return;
         }
@@ -131,25 +144,30 @@ public class EventManager {
         if (ClaimManager.checkIfChunkIsClaimed(currentChunk.x, currentChunk.z)) {
             String playerFactionName = PlayerDataBase.getPlayerFaction(player.getStringUUID());
             String chunkFactionName = ClaimManager.getClaimOwner(currentChunk.x, currentChunk.z);
+
             int powerFaction = FactionManager.getPower(playerFactionName);
             int targetFactionPower = FactionManager.getPower(chunkFactionName);
-            int newClaimPrice = ServerVariable.claimBasePrice * (FactionManager.getPower(playerFactionName) / targetFactionPower);
+            int newClaimPrice = ServerVariable.claimBasePrice * (powerFaction / Math.max(1, targetFactionPower));
+
             if (playerFactionName.equals(chunkFactionName)) {
                 player.displayClientMessage(Component.literal("§e" + chunkFactionName), true);
-            }
-            else {
+            } else {
                 if (targetFactionPower > powerFaction) {
                     player.displayClientMessage(Component.literal("§cClaim impossible"), true);
+                } else {
+                    player.displayClientMessage(Component.literal("§e" + chunkFactionName
+                            + " prix de surclaim : "
+                            + NumberFormat.getInstance(Locale.FRENCH).format(newClaimPrice) + "€"), true);
                 }
-                else
-                    player.displayClientMessage(Component.literal("§e" + chunkFactionName +  " prix de surclaim : " + NumberFormat.getInstance(Locale.FRENCH).format(newClaimPrice) + "€"), true);
             }
         } else {
             String playerFactionName = PlayerDataBase.getPlayerFaction(player.getStringUUID());
             if (playerFactionName.equals("server"))
                 player.displayClientMessage(Component.literal("§flibre"), true);
             else
-                player.displayClientMessage(Component.literal("§flibre : " + NumberFormat.getInstance(Locale.FRENCH).format(FactionManager.getClaimPrice(playerFactionName)) + "€"), true);
+                player.displayClientMessage(Component.literal("§flibre : "
+                        + NumberFormat.getInstance(Locale.FRENCH)
+                        .format(FactionManager.getClaimPrice(playerFactionName)) + "€"), true);
         }
     }
 

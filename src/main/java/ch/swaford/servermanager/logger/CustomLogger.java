@@ -11,11 +11,16 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.CommandEvent;
 import org.slf4j.Logger;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 public class CustomLogger {
+    private static final Path MISSILE_LOG_FILE = Path.of("explosions", "missiles.log");
     private static final Logger LOGGER = LogUtils.getLogger();
 
     public static void newLog(String message, String source, String time) {
@@ -44,7 +49,20 @@ public class CustomLogger {
             targetClaimOwner = target.toShortString();
         }
 
-        LOGGER.info("MISSILE_LOGGER[" + formatted + "][FROM > " + launchClaimOwner + " TARGET > " + targetClaimOwner + "]") ;
+        String logString = "MISSILE_LOGGER[" + formatted + "][FROM > " + launchClaimOwner + "        TARGET > " + targetClaimOwner + "(" + target.toShortString() + ")]";
+        LOGGER.info(logString);
+
+        try {
+            Files.writeString(
+                    MISSILE_LOG_FILE,
+                    logString + System.lineSeparator(),
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.APPEND
+            );
+        } catch (IOException e) {
+            LOGGER.info(e.getMessage());
+        }
+
     }
 
     @SubscribeEvent

@@ -1,5 +1,6 @@
 package ch.swaford.servermanager.explosion;
 
+import ch.swaford.servermanager.TimeManager;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -11,6 +12,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.ClipBlockStateContext;
 import net.minecraft.world.level.Level;
@@ -220,7 +222,7 @@ public class ExplosionManager {
         ExplosionManager.createExplosion(palette, blocks, level.dimension(), center);
     }
 
-    public static void restoreExplosion(MinecraftServer server, String file) {
+    public static void restoreExplosion(MinecraftServer server, String file, boolean restoreNbt) {
         Path restoredPath = Path.of("explosions", "restored", file);
         Path path = Path.of("explosions", file);
         try {
@@ -252,10 +254,78 @@ public class ExplosionManager {
                 BlockState state = storedExplosion.palette().get(block.paletteId());
                 if (check.isAir() || check.getBlock() == Blocks.WATER)
                     level.setBlock(blockPos, state, 3);
+                if (restoreNbt && block.nbt() != null)
+                {
+                    BlockEntity be = level.getBlockEntity(blockPos);
+                    if (be != null) {
+                        be.loadWithComponents(block.nbt(), level.registryAccess());
+                    }
+                }
             }
             Files.move(path, restoredPath, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    public static String[][] inspectExplosion(Level level, BlockPos pos, int range) {
+        List<String[]> list = new ArrayList<>();
+        Path folder = Path.of("explosions");
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(folder, "*.exp")) {
+            for (Path path : stream) {
+                String fileName = path.getFileName().toString();
+                String noPrefix = fileName.substring(5, fileName.length() - 4);
+                String[] parts = noPrefix.split("_");
+                String[] coords = parts[0].split("\\.");
+                int x = Integer.parseInt(coords[0]);
+                int y = Integer.parseInt(coords[1]);
+                int z = Integer.parseInt(coords[2]);
+
+                double dx = x - pos.getX();
+                double dy = y - pos.getY();
+                double dz = z - pos.getZ();
+                double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+                if (distance > range) continue;
+
+                String position = x + "," + y + "," + z;
+                String date = parts[1];
+                String time = parts[2] + ":" + parts[3] + ":" + parts[4].substring(0, 2);
+                String tmp = "[" + date + "](" + time + ") -> " + position;
+                list.add(new String[]{tmp, fileName});
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return list.toArray(new String[list.size()][2]);
+    }
+
+    public static void restoreInRange(Level level, BlockPos pos, int range, MinecraftServer server) {
+        List<String> list = new ArrayList<>();
+        Path folder = Path.of("explosions");
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(folder, "*.exp")) {
+            for (Path path : stream) {
+                String fileName = path.getFileName().toString();
+                String noPrefix = fileName.substring(5, fileName.length() - 4);
+                String[] parts = noPrefix.split("_");
+                String[] coords = parts[0].split("\\.");
+                int x = Integer.parseInt(coords[0]);
+                int y = Integer.parseInt(coords[1]);
+                int z = Integer.parseInt(coords[2]);
+
+                double dx = x - pos.getX();
+                double dy = y - pos.getY();
+                double dz = z - pos.getZ();
+                double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+                if (distance > range) continue;
+                list.add(fileName);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        for (String fileName : list) {
+            restoreExplosion(server, fileName, true);
         }
     }
 
@@ -274,8 +344,7 @@ public class ExplosionManager {
         }
 
         for (String file : files) {
-            Path path = Path.of("explosions", file);
-            restoreExplosion(server, file);
+            restoreExplosion(server, file, true);
         }
     }
 
@@ -291,13 +360,29 @@ public class ExplosionManager {
         try {
             LocalDateTime now = LocalDateTime.now();
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH_mm_ss");
-            String id = center.getX() + "." + center.getY() + "." + center.getZ() + "_" + formatter.format(now);
+            String id = center.getX() + "." + center.getY() + "." + center.getZ() + "_" + formatter.format(now) + UUID.randomUUID();
             String fileName = "EXPL_" + id + "_.exp";
             Path file = folder.resolve(fileName);
             ExplosionManager.saveExplosion(storedExplosion, file);
+            TimeManager.queueExplosion(storedExplosion, fileName);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public static List<String> loadAllExplFiles() {
+        List<String> files = new ArrayList<>();
+
+        Path folder = Path.of("explosions");
+
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(folder, "*.exp")) {
+            for (Path path : stream) {
+                files.add(path.getFileName().toString());
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return files;
     }
 
 }
